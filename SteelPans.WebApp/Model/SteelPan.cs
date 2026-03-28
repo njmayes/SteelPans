@@ -15,7 +15,15 @@ public enum PanType
 public class PanNote
 {
     public required Note Note { get; init; }
-    public bool Active { get; set; } = false;
+
+    [JsonIgnore]
+    public bool Selected { get; set; } = false;
+
+    [JsonIgnore]
+    public bool Playing { get; set; } = false;
+
+    [JsonIgnore]
+    public bool Active => Selected || Playing;
 
     public override string ToString() => Note.ToString();
 }

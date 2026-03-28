@@ -2,15 +2,18 @@
 @page "/pans"
 @using SteelPans.WebApp.Model
 @using SteelPans.WebApp.Services
+@using SteelPans.WebApp.Extensions
+@inject IJSRuntime JS
 @inject SteelPanLoader PanLoader
+@inject MidiLoaderService MidiLoader
 
 <h3>Steel Pans</h3>
 
-@if (!string.IsNullOrWhiteSpace(_loadError))
+@if (!string.IsNullOrWhiteSpace(loadError_))
 {
-    <div class="alert alert-danger">@_loadError</div>
+    <div class="alert alert-danger">@loadError_</div>
 }
-else if (_pans.Count == 0)
+else if (pans_.Count == 0)
 {
     <p>No pans found.</p>
 }
@@ -18,39 +21,226 @@ else
 {
     <div class="mb-3">
         <label for="pan-select" class="form-label">Select a pan</label>
-        <select id="pan-select" class="form-select" @bind="_selectedIndex">
-            <option value="-1">@PanType.None</option>
-            @for (var i = 0; i < _pans.Count; i++)
+        <select id="pan-select"
+                class="form-select"
+                value="@selectedIndex_"
+                @onchange="OnPanChanged">
+            @for (var i = 0; i < pans_.Count; i++)
             {
-                <option value="@i">@_pans[i].PanType.ToSpacedPascal()</option>
+                <option value="@i">@pans_[i].PanType.ToSpacedPascal()</option>
             }
         </select>
     </div>
 
-    <SteelPanView Pan="@SelectedPan" />
+    <div class="steel-pan__midi-controls mb-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <InputFile class="form-control steel-pan__midi-input"
+                       OnChange="OnMidiSelected"
+                       accept=".mid,.midi" />
+
+            @if (midiTracks_.Count > 0)
+            {
+                <select class="form-select steel-pan__midi-track-select"
+                        value="@selectedTrackIndex_"
+                        @onchange="OnTrackChanged">
+                    @foreach (var track in midiTracks_)
+                    {
+                        var label = string.IsNullOrWhiteSpace(track.Name)
+                            ? $"Track {track.Index}"
+                            : $"Track {track.Index} - {track.Name}";
+
+                        <option value="@track.Index">
+                            @label (@track.NoteCount notes)
+                        </option>
+                    }
+                </select>
+            }
+
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-primary"
+                        type="button"
+                        @onclick="PlayMidiAsync"
+                        disabled="@(midiEvents_.Count == 0 || isMidiPlaying_)">
+                    Play MIDI
+                </button>
+
+                <button class="btn btn-danger"
+                        type="button"
+                        @onclick="StopMidiAsync"
+                        disabled="@(!isMidiPlaying_)">
+                    Stop
+                </button>
+
+                @if (!string.IsNullOrWhiteSpace(midiFileName_))
+                {
+                    <div class="text-muted small">
+                        @if (selectedTrackInfo_ is not null)
+                        {
+                            <span>
+                                @(!string.IsNullOrWhiteSpace(selectedTrackInfo_.Name)
+                                    ? $"Track {selectedTrackInfo_.Index} - {selectedTrackInfo_.Name}"
+                                    : $"Track {selectedTrackInfo_.Index}")
+                            </span>
+                            <span> · </span>
+                            <span>@selectedTrackInfo_.NoteCount raw notes</span>
+                            <span> · </span>
+                        }
+
+                        <span>@midiEvents_.Count mapped notes</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <SteelPanView @ref="steelPanView_" Pan="@SelectedPan" />
 }
 
 @code {
-    private readonly List<SteelPan> _pans = new();
-    private int _selectedIndex;
-    private string? _loadError;
+    private readonly List<SteelPan> pans_ = [];
+    private int selectedIndex_;
+    private string? loadError_;
+
+    private IBrowserFile? midiFile_;
+    private string? midiFileName_;
+    private List<MidiTrackInfo> midiTracks_ = [];
+    private int? selectedTrackIndex_;
+
+    private List<MidiPanEvent> midiEvents_ = [];
+    private CancellationTokenSource? midiPlaybackCts_;
+    private bool isMidiPlaying_;
+
+    private SteelPanView? steelPanView_;
 
     private SteelPan? SelectedPan =>
-        _selectedIndex >= 0 && _selectedIndex < _pans.Count
-            ? _pans[_selectedIndex]
+        selectedIndex_ >= 0 && selectedIndex_ < pans_.Count
+            ? pans_[selectedIndex_]
             : null;
+
+    private MidiTrackInfo? selectedTrackInfo_ =>
+        selectedTrackIndex_ is null
+            ? null
+            : midiTracks_.FirstOrDefault(t => t.Index == selectedTrackIndex_.Value);
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _pans.Clear();
-            _pans.AddRange(await PanLoader.LoadAsync());
-            _selectedIndex = -1;
+            pans_.Clear();
+            pans_.AddRange(await PanLoader.LoadAsync());
+            selectedIndex_ = 0;
         }
         catch (Exception ex)
         {
-            _loadError = ex.Message;
+            loadError_ = ex.Message;
         }
+    }
+
+    private async Task OnMidiSelected(InputFileChangeEventArgs e)
+    {
+        await StopMidiAsync();
+
+        midiFile_ = e.File;
+        midiFileName_ = midiFile_.Name;
+
+        midiTracks_.Clear();
+        midiEvents_.Clear();
+        selectedTrackIndex_ = null;
+
+        await using var stream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+        midiTracks_ = await MidiLoader.GetTrackInfosAsync(stream);
+
+        selectedTrackIndex_ = midiTracks_
+            .OrderByDescending(t => t.NoteCount)
+            .Select(t => (int?)t.Index)
+            .FirstOrDefault();
+
+        await ReloadSelectedTrackAsync();
+    }
+
+    private async Task OnTrackChanged(ChangeEventArgs e)
+    {
+        if (e.Value is null || !int.TryParse(e.Value.ToString(), out var trackIndex))
+            return;
+
+        selectedTrackIndex_ = trackIndex;
+        await ReloadSelectedTrackAsync();
+    }
+
+    private async Task OnPanChanged(ChangeEventArgs e)
+    {
+        if (e.Value is null || !int.TryParse(e.Value.ToString(), out var selectedIndex))
+            return;
+
+        selectedIndex_ = selectedIndex;
+        await ReloadSelectedTrackAsync();
+    }
+
+    private async Task ReloadSelectedTrackAsync()
+    {
+        if (midiFile_ is null || selectedTrackIndex_ is null)
+        {
+            midiEvents_.Clear();
+            StateHasChanged();
+            return;
+        }
+
+        await using var stream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+
+        var rawEvents = await MidiLoader.LoadSingleTrackAsync(
+            stream,
+            selectedTrackIndex_.Value);
+
+        midiEvents_ = SelectedPan is not null
+            ? PanMidiMapper.FilterToPan(SelectedPan, rawEvents)
+            : rawEvents;
+
+        StateHasChanged();
+    }
+
+    private async Task PlayMidiAsync()
+    {
+        if (steelPanView_ is null || midiEvents_.Count == 0)
+            return;
+
+        midiPlaybackCts_?.Cancel();
+        midiPlaybackCts_?.Dispose();
+
+        midiPlaybackCts_ = new CancellationTokenSource();
+        isMidiPlaying_ = true;
+        StateHasChanged();
+
+        try
+        {
+            await steelPanView_.PlayMidiSequenceAsync(
+                midiEvents_,
+                midiPlaybackCts_.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            midiPlaybackCts_?.Dispose();
+            midiPlaybackCts_ = null;
+            isMidiPlaying_ = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopMidiAsync()
+    {
+        midiPlaybackCts_?.Cancel();
+        midiPlaybackCts_?.Dispose();
+        midiPlaybackCts_ = null;
+
+        await JS.InvokeVoidAsync("steelPan.stopMidiSchedule");
+
+        isMidiPlaying_ = false;
+
+        if (steelPanView_ is not null)
+            await steelPanView_.StopMidiPlaybackAsync();
+
+        StateHasChanged();
     }
 }

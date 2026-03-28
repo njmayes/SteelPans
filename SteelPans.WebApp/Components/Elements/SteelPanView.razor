@@ -1,34 +1,39 @@
 ﻿@inject SteelPanSvgService SvgService
 @inject IJSRuntime JS
+@inject IWebHostEnvironment Env
 @implements IAsyncDisposable
 
 @if (Pan is not null)
 {
-    <div class="steel-pan__controls mb-3">
-        <ChordBuilder OnChordSelected="SelectChordAsync" />
+    <div class="steel-pan__root">
+        <div class="steel-pan__controls mb-3">
+            <ChordBuilder OnChordSelected="SelectChordAsync" />
 
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <button class="btn btn-primary"
-                    type="button"
-                    @onclick="PlaySelectedNotesAsync"
-                    disabled="@(!CanPlaySelectedNotes)">
-                Play
-            </button>
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <button class="btn btn-primary"
+                        type="button"
+                        @onclick="PlaySelectedNotesAsync"
+                        disabled="@(!CanPlaySelectedNotes)">
+                    Play
+                </button>
 
-            <span class="steel-pan__hint text-muted small">
-                <span>Click = Play</span>
-                <span class="steel-pan__hint-sep">·</span>
-                <span>Shift + Click = Toggle</span>
-            </span>
+                <span class="steel-pan__hint text-muted small">
+                    <span>Click = Play</span>
+                    <span class="steel-pan__hint-sep">·</span>
+                    <span>Shift + Click = Toggle</span>
+                </span>
+            </div>
         </div>
-    </div>
 
-    <div class="steel-pan @Class" style="@Style">
-        @((MarkupString)panSvg_)
+        <div class="steel-pan @Class" style="@Style">
+            @((MarkupString)panSvg_)
+        </div>
     </div>
 }
 
 @code {
+    private bool notesPreloaded_;
+
     [Parameter, EditorRequired]
     public SteelPan? Pan { get; set; }
 
@@ -38,16 +43,20 @@
     [Parameter]
     public string? Style { get; set; }
 
-    private bool CanPlaySelectedNotes => Pan?.Notes.Any(n => n.Active) == true;
+    private bool CanPlaySelectedNotes => Pan?.Notes.Any(n => n.Selected) == true;
 
     private readonly string componentId_ = $"steelpan_{Guid.NewGuid():N}";
     private DotNetObjectReference<SteelPanView>? selfRef_;
     private string panSvg_ = string.Empty;
     private string svgPath_ = string.Empty;
+    private TimeSpan sampleDuration_;
+    private CancellationTokenSource? playSelectedCts_;
 
-    protected override void OnInitialized()
+    protected override Task OnInitializedAsync()
     {
         selfRef_ = DotNetObjectReference.Create(this);
+        sampleDuration_ = GetWavDuration();
+        return Task.CompletedTask;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -59,11 +68,8 @@
             return;
         }
 
-        svgPath_ = $"images/{Pan.PanType.ToKebabCase()}.svg";
-
-        await JS.InvokeVoidAsync(
-            "steelPan.preloadNotes",
-            (object)Pan.Notes.Select(n => n.ToString()).Distinct().ToArray());
+        notesPreloaded_ = false;
+        svgPath_ = $"images/pans/{Pan.PanType.ToKebabCase()}.svg";
 
         await SvgService.PrebuildNoteFragmentsAsync(
             svgPath_,
@@ -77,6 +83,14 @@
         if (firstRender && selfRef_ is not null)
         {
             await JS.InvokeVoidAsync("steelPan.register", componentId_, selfRef_);
+        }
+
+        if (!notesPreloaded_ && Pan is not null)
+        {
+            await JS.InvokeVoidAsync(
+                "steelPan.preloadNotes",
+                    (object)Pan.Notes.Select(n => n.ToString()).Distinct().ToArray());
+            notesPreloaded_ = true;
         }
     }
 
@@ -104,23 +118,10 @@
         if (note is null)
             return;
 
-        if (note.Active)
-        {
-            note.Active = false;
-            await RebuildSvgAsync();
-            await InvokeAsync(StateHasChanged);
+        if (!shiftKey)
             return;
-        }
 
-        if (shiftKey)
-        {
-            note.Active = true;
-            await RebuildSvgAsync();
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-
-        await JS.InvokeVoidAsync("steelPan.playNote", noteKey);
+        note.Selected = !note.Selected;
         await RebuildSvgAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -130,17 +131,239 @@
         if (Pan is null)
             return;
 
+        playSelectedCts_?.Cancel();
+        playSelectedCts_?.Dispose();
+        playSelectedCts_ = null;
+
         foreach (var note in Pan.Notes)
         {
-            note.Active = pitchClasses.Contains(note.Note.PitchClass);
+            note.Selected = pitchClasses.Contains(note.Note.PitchClass);
+            note.Playing = false;
         }
 
         await RebuildSvgAsync();
         await InvokeAsync(StateHasChanged);
     }
 
+    private async Task PlaySelectedNotesAsync()
+    {
+        if (Pan is null)
+            return;
+
+        var selectedNotes = Pan.Notes
+            .Where(n => n.Selected)
+            .ToArray();
+
+        if (selectedNotes.Length == 0)
+            return;
+
+        var selectedNoteKeys = selectedNotes
+            .Select(n => n.ToString())
+            .Distinct()
+            .ToArray();
+
+        playSelectedCts_?.Cancel();
+        playSelectedCts_?.Dispose();
+
+        foreach (var note in Pan.Notes)
+            note.Playing = false;
+
+        var cts = new CancellationTokenSource();
+        playSelectedCts_ = cts;
+
+        foreach (var note in selectedNotes)
+            note.Playing = true;
+
+        await RebuildSvgAsync();
+        await InvokeAsync(StateHasChanged);
+
+        await JS.InvokeVoidAsync("steelPan.playNotes", (object)selectedNoteKeys);
+
+        _ = ClearSelectedAfterDelayAsync(selectedNotes, cts);
+    }
+
+    private async Task ClearSelectedAfterDelayAsync(PanNote[] notes, CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(sampleDuration_, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (cts.IsCancellationRequested || playSelectedCts_ != cts)
+            return;
+
+        foreach (var note in notes)
+            note.Playing = false;
+
+        if (playSelectedCts_ == cts)
+        {
+            playSelectedCts_.Dispose();
+            playSelectedCts_ = null;
+        }
+
+        await RebuildSvgAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static List<MidiPanPlaybackAction> BuildPlaybackActions(IEnumerable<MidiPanEvent> events)
+    {
+        return events
+            .SelectMany(e => new[]
+            {
+            new MidiPanPlaybackAction
+            {
+                Note = e.Note,
+                Time = e.Start,
+                IsNoteOn = true,
+            },
+            new MidiPanPlaybackAction
+            {
+                Note = e.Note,
+                Time = e.End,
+                IsNoteOn = false,
+            },
+            })
+            .OrderBy(a => a.Time)
+            .ThenBy(a => a.IsNoteOn ? 1 : 0)
+            .ToList();
+    }
+    private static List<MidiPanScheduledAction> BuildScheduledActions(IEnumerable<MidiPanPlaybackAction> actions)
+    {
+        return actions
+            .Select(a => new MidiPanScheduledAction
+            {
+                NoteKey = a.Note.ToString(),
+                TimeSeconds = a.Time.TotalSeconds,
+                IsNoteOn = a.IsNoteOn,
+            })
+            .ToList();
+    }
+
+    public async Task PlayMidiSequenceAsync(
+        IReadOnlyList<MidiPanEvent> events,
+        CancellationToken cancellationToken = default)
+    {
+        if (Pan is null || events.Count == 0)
+            return;
+
+        foreach (var note in Pan.Notes)
+            note.Selected = false;
+
+        await RebuildSvgAsync();
+        await InvokeAsync(StateHasChanged);
+
+        var playbackActions = BuildPlaybackActions(events);
+        var scheduledActions = BuildScheduledActions(playbackActions);
+        var activeCounts = new Dictionary<PanNote, int>();
+        var stopwatch = Stopwatch.StartNew();
+
+        await JS.InvokeVoidAsync("steelPan.playMidiSchedule", scheduledActions);
+
+        try
+        {
+            foreach (var action in playbackActions)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var delay = action.Time - stopwatch.Elapsed;
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, cancellationToken);
+
+                var panNote = Pan.Notes.FirstOrDefault(
+                    n => n.Note.IsEnharmonicEquivalentTo(action.Note));
+
+                if (panNote is null)
+                    continue;
+
+                var changed = false;
+
+                if (action.IsNoteOn)
+                {
+                    activeCounts.TryGetValue(panNote, out var count);
+                    activeCounts[panNote] = count + 1;
+
+                    if (!panNote.Playing)
+                    {
+                        panNote.Playing = true;
+                        changed = true;
+                    }
+                }
+                else
+                {
+                    if (activeCounts.TryGetValue(panNote, out var count))
+                    {
+                        count--;
+
+                        if (count <= 0)
+                        {
+                            activeCounts.Remove(panNote);
+
+                            if (panNote.Playing)
+                            {
+                                panNote.Playing = false;
+                                changed = true;
+                            }
+                        }
+                        else
+                        {
+                            activeCounts[panNote] = count;
+                        }
+                    }
+                }
+
+                if (changed)
+                {
+                    await RebuildSvgAsync();
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        finally
+        {
+            foreach (var note in Pan.Notes)
+                note.Playing = false;
+
+            await RebuildSvgAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    
+    public async Task StopMidiPlaybackAsync()
+    {
+        if (Pan is null)
+            return;
+
+        foreach (var note in Pan.Notes)
+            note.Playing = false;
+
+        await RebuildSvgAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private TimeSpan GetWavDuration()
+    {
+        var samplesPath = Path.Combine(Env.WebRootPath, "audio", "samples");
+        var path = Directory.Exists(samplesPath)
+            ? Directory.EnumerateFiles(samplesPath, "*.wav", SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+
+        if (path is null)
+            return TimeSpan.Zero;
+
+        using var reader = new AudioFileReader(path);
+        return reader.TotalTime;
+    }
+
     public async ValueTask DisposeAsync()
     {
+        playSelectedCts_?.Cancel();
+        playSelectedCts_?.Dispose();
+        playSelectedCts_ = null;
+
         try
         {
             await JS.InvokeVoidAsync("steelPan.unregister", componentId_);
@@ -150,22 +373,5 @@
         }
 
         selfRef_?.Dispose();
-    }
-
-    private async Task PlaySelectedNotesAsync()
-    {
-        if (Pan is null)
-            return;
-
-        var activeNoteKeys = Pan.Notes
-            .Where(n => n.Active)
-            .Select(n => n.ToString())
-            .Distinct()
-            .ToArray();
-
-        if (activeNoteKeys.Length == 0)
-            return;
-
-        await JS.InvokeVoidAsync("steelPan.playNotes", (object)activeNoteKeys);
     }
 }

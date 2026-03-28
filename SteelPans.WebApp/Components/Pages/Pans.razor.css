@@ -1,0 +1,14 @@
+﻿.steel-pan__midi-controls {
+    width: 100%;
+}
+
+.steel-pan__midi-input {
+    max-width: 260px;
+}
+
+@media (max-width: 576px) {
+    .steel-pan__midi-input {
+        max-width: 100%;
+        flex: 1 1 100%;
+    }
+}

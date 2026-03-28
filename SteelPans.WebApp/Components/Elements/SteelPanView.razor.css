@@ -1,4 +1,8 @@
-﻿.steel-pan {
+﻿.steel-pan__root {
+    margin: 0.5rem;
+}
+
+.steel-pan {
     width: 100%;
     max-width: 600px;
     user-select: none;

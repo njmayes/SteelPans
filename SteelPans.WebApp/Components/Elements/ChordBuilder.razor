@@ -1,35 +1,66 @@
-﻿<div class="steel-pan__chord-builder">
-    <select class="form-select" value="@rootLetter_" @onchange="OnRootLetterChanged">
-        @foreach (var letter in Enum.GetValues<NoteLetter>())
-        {
-            <option value="@letter">@letter</option>
-        }
-    </select>
+﻿@using SteelPans.WebApp.Model
 
-    <select class="form-select" value="@rootAccidental_" @onchange="OnRootAccidentalChanged">
-        <option value="-1">♭</option>
-        <option value="0"></option>
-        <option value="1">♯</option>
-    </select>
+<div class="steel-pan__chord-builder">
+    <div class="steel-pan__chord-group">
+        <label class="steel-pan__chord-label">Root</label>
 
-    <select class="form-select" value="@selectedChord_" @onchange="OnChordChanged">
-        @foreach (var chord in chordOptions_.Keys)
-        {
-            <option value="@chord">@chord</option>
-        }
-    </select>
-    
-    <button class="btn btn-outline-primary" type="button" @onclick="ClearChordAsync">
-        Clear
-    </button>
-    <button class="btn btn-outline-primary" type="button" @onclick="ApplyChordAsync">
-        Set
-    </button>
+        <div class="steel-pan__chord-row">
+            <select class="form-select steel-pan__chord-select steel-pan__chord-select--note"
+                    value="@rootLetter_"
+                    @onchange="OnRootLetterChanged">
+                @foreach (var letter in Enum.GetValues<NoteLetter>())
+                {
+                    <option value="@letter">@letter</option>
+                }
+            </select>
+
+            <select class="form-select steel-pan__chord-select steel-pan__chord-select--accidental"
+                    value="@rootAccidental_"
+                    @onchange="OnRootAccidentalChanged">
+                <option value="-1">♭</option>
+                <option value="0">♮</option>
+                <option value="1">♯</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="steel-pan__chord-group steel-pan__chord-group--type">
+        <label class="steel-pan__chord-label">Chord</label>
+
+        <select class="form-select steel-pan__chord-select"
+                value="@selectedChord_"
+                @onchange="OnChordChanged">
+            @foreach (var chord in chordOptions_.Keys)
+            {
+                <option value="@chord">@chord</option>
+            }
+        </select>
+    </div>
+
+    <div class="steel-pan__chord-actions">
+        <button class="btn btn-outline-secondary"
+                type="button"
+                @onclick="ClearChordAsync">
+            Clear
+        </button>
+
+        <button class="btn btn-primary"
+                type="button"
+                @onclick="ApplyChordAsync">
+            Set
+        </button>
+
+        <button class="btn btn-primary steel-pan__chord-play"
+                type="button"
+                @onclick="PlayClicked">
+            Play
+        </button>
+    </div>
 </div>
 
 @code {
-    [Parameter]
-    public EventCallback<HashSet<int>> OnChordSelected { get; set; }
+    [Parameter] public EventCallback<HashSet<int>> OnChordSelected { get; set; }
+    [Parameter] public EventCallback OnPlay { get; set; }
 
     private NoteLetter rootLetter_ = NoteLetter.C;
     private int rootAccidental_ = 0;
@@ -65,7 +96,7 @@
         if (!string.IsNullOrWhiteSpace(value) && chordOptions_.ContainsKey(value))
             selectedChord_ = value;
     }
-    
+
     private async Task ClearChordAsync()
     {
         await OnChordSelected.InvokeAsync(new());
@@ -76,10 +107,13 @@
         var root = new Note(rootLetter_, new Accidental(rootAccidental_), octave_);
         var chord = root.BuildChord(chordOptions_[selectedChord_]);
 
-        var pitchClasses = chord
-            .Select(n => n.PitchClass)
-            .ToHashSet();
-
+        var pitchClasses = chord.Select(n => n.PitchClass).ToHashSet();
         await OnChordSelected.InvokeAsync(pitchClasses);
+    }
+
+    private async Task PlayClicked()
+    {
+        if (OnPlay.HasDelegate)
+            await OnPlay.InvokeAsync();
     }
 }

@@ -2,15 +2,24 @@
 @implements IAsyncDisposable
 
 <div class="metronome">
-    <div class="d-flex align-items-center gap-3 flex-wrap">
+    <div class="metronome__header">
         <div class="metronome__status">
             <span class="badge @(IsPlaying && Enabled ? "text-bg-success" : "text-bg-secondary")">
                 @(IsPlaying && Enabled ? "Metronome On" : "Metronome Off")
             </span>
+            <span class="metronome__status-text">Beat @displayBeat_ / @BeatsPerBar</span>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
-            <label class="form-label mb-0" for="@($"{componentId_}_bpm")">BPM</label>
+        <button class="btn btn-outline-primary"
+                type="button"
+                @onclick="ToggleEnabledAsync">
+            @(Enabled ? "Disable" : "Enable")
+        </button>
+    </div>
+
+    <div class="metronome__controls">
+        <div class="metronome__field">
+            <label class="form-label" for="@($"{componentId_}_bpm")">BPM</label>
             <input id="@($"{componentId_}_bpm")"
                    class="form-control metronome__bpm-input"
                    type="number"
@@ -22,27 +31,17 @@
                    disabled="@DisableBpmEditing" />
         </div>
 
-        <div class="d-flex align-items-center gap-2">
-            <label class="form-label mb-0" for="@($"{componentId_}_timeSignature")">Time Signature</label>
+        <div class="metronome__field">
+            <label class="form-label" for="@($"{componentId_}_timeSignature")">Time Signature</label>
             <input id="@($"{componentId_}_timeSignature")"
                    class="form-control metronome__time-signature-input"
                    type="text"
                    value="@($"{BeatsPerBar}/{BeatUnit}")"
                    disabled="@true" />
         </div>
-
-        <button class="btn btn-outline-primary"
-                type="button"
-                @onclick="ToggleEnabledAsync">
-            @(Enabled ? "Disable" : "Enable")
-        </button>
-
-        <span class="text-muted small">
-            Beat @displayBeat_ / @BeatsPerBar
-        </span>
     </div>
 
-    <div class="metronome__visual mt-3 @(Enabled ? null : "metronome__visual--disabled")">
+    <div class="metronome__visual @(Enabled ? null : "metronome__visual--disabled")">
         <div class="metronome__case">
             <div class="metronome__arm-pivot"></div>
 
@@ -200,18 +199,10 @@
                 await InvokeAsync(StateHasChanged);
                 await JS.InvokeVoidAsync("steelPan.playMetronomeTick", isAccent);
 
-                var flashDuration = TimeSpan.FromMilliseconds(Math.Min(90, interval.TotalMilliseconds * 0.35));
-                await Task.Delay(flashDuration, cancellationToken);
-
-                tickFlash_ = false;
-                accentFlash_ = false;
-                await InvokeAsync(StateHasChanged);
+                _ = ClearFlashSoonAsync();
 
                 beatIndex_++;
-
-                var remaining = interval - flashDuration;
-                if (remaining > TimeSpan.Zero)
-                    await Task.Delay(remaining, cancellationToken);
+                await Task.Delay(interval, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -219,29 +210,34 @@
         }
     }
 
+    private async Task ClearFlashSoonAsync()
+    {
+        try
+        {
+            await Task.Delay(90);
+            tickFlash_ = false;
+            accentFlash_ = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
+    }
+
     private async Task StopLoopAsync()
     {
         if (loopCts_ is null)
-        {
-            tickFlash_ = false;
-            accentFlash_ = false;
-            displayBeat_ = 1;
-            beatIndex_ = 0;
-            await InvokeAsync(StateHasChanged);
             return;
-        }
 
         loopCts_.Cancel();
         loopCts_.Dispose();
         loopCts_ = null;
 
-        beatIndex_ = 0;
-        displayBeat_ = 1;
         tickFlash_ = false;
         accentFlash_ = false;
-        swingLeft_ = true;
+        beatIndex_ = 0;
+        displayBeat_ = 1;
 
-        await JS.InvokeVoidAsync("steelPan.stopMetronome");
         await InvokeAsync(StateHasChanged);
     }
 

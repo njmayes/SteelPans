@@ -1,4 +1,9 @@
-﻿@inject SteelPanSvgService SvgService
+﻿@using System.Diagnostics
+@using NAudio.Wave
+@using SteelPans.WebApp.Model
+@using SteelPans.WebApp.Services
+@using SteelPans.WebApp.Extensions
+@inject SteelPanSvgService SvgService
 @inject IJSRuntime JS
 @inject IWebHostEnvironment Env
 @implements IAsyncDisposable
@@ -6,28 +11,17 @@
 @if (Pan is not null)
 {
     <div class="steel-pan__root">
-        <div class="steel-pan__controls mb-3">
-            <ChordBuilder OnChordSelected="SelectChordAsync" />
-
-            <div class="d-flex align-items-center gap-3 flex-wrap">
-                <button class="btn btn-primary"
-                        type="button"
-                        @onclick="PlaySelectedNotesAsync"
-                        disabled="@(!CanPlaySelectedNotes)">
-                    Play
-                </button>
-
-                <span class="steel-pan__hint text-muted small">
-                    <span>Click = Play</span>
-                    <span class="steel-pan__hint-sep">·</span>
-                    <span>Shift + Click = Toggle</span>
-                </span>
+        <div class="steel-pan__canvas">
+            <div class="steel-pan @Class" style="@Style">
+                @((MarkupString)panSvg_)
             </div>
         </div>
-
-        <div class="steel-pan @Class" style="@Style">
-            @((MarkupString)panSvg_)
-        </div>
+    </div>
+}
+else
+{
+    <div class="steel-pan steel-pan--empty">
+        No pan loaded.
     </div>
 }
 
@@ -42,8 +36,6 @@
 
     [Parameter]
     public string? Style { get; set; }
-
-    private bool CanPlaySelectedNotes => Pan?.Notes.Any(n => n.Selected) == true;
 
     private readonly string componentId_ = $"steelpan_{Guid.NewGuid():N}";
     private DotNetObjectReference<SteelPanView>? selfRef_;
@@ -81,15 +73,14 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && selfRef_ is not null)
-        {
             await JS.InvokeVoidAsync("steelPan.register", componentId_, selfRef_);
-        }
 
         if (!notesPreloaded_ && Pan is not null)
         {
             await JS.InvokeVoidAsync(
                 "steelPan.preloadNotes",
-                    (object)Pan.Notes.Select(n => n.ToString()).Distinct().ToArray());
+                (object)Pan.Notes.Select(n => n.ToString()).Distinct().ToArray());
+
             notesPreloaded_ = true;
         }
     }
@@ -122,11 +113,12 @@
             return;
 
         note.Selected = !note.Selected;
+
         await RebuildSvgAsync();
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task SelectChordAsync(HashSet<int> pitchClasses)
+    public async Task SelectChordAsync(HashSet<int> pitchClasses)
     {
         if (Pan is null)
             return;
@@ -145,7 +137,7 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task PlaySelectedNotesAsync()
+    public async Task PlaySelectedNotesAsync()
     {
         if (Pan is null)
             return;
@@ -214,18 +206,18 @@
         return events
             .SelectMany(e => new[]
             {
-            new MidiPanPlaybackAction
-            {
-                Note = e.Note,
-                Time = e.Start,
-                IsNoteOn = true,
-            },
-            new MidiPanPlaybackAction
-            {
-                Note = e.Note,
-                Time = e.End,
-                IsNoteOn = false,
-            },
+                new MidiPanPlaybackAction
+                {
+                    Note = e.Note,
+                    Time = e.Start,
+                    IsNoteOn = true,
+                },
+                new MidiPanPlaybackAction
+                {
+                    Note = e.Note,
+                    Time = e.End,
+                    IsNoteOn = false,
+                },
             })
             .OrderBy(a => a.Time)
             .ThenBy(a => a.IsNoteOn ? 1 : 0)
@@ -252,7 +244,10 @@
             return;
 
         foreach (var note in Pan.Notes)
+        {
             note.Selected = false;
+            note.Playing = false;
+        }
 
         await RebuildSvgAsync();
         await InvokeAsync(StateHasChanged);
@@ -332,7 +327,7 @@
             await InvokeAsync(StateHasChanged);
         }
     }
-    
+
     public async Task StopMidiPlaybackAsync()
     {
         if (Pan is null)

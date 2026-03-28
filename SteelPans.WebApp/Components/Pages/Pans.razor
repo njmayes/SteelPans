@@ -7,90 +7,108 @@
 @inject SteelPanLoader PanLoader
 @inject MidiLoaderService MidiLoader
 
-<h3>Steel Pans</h3>
-
-@if (!string.IsNullOrWhiteSpace(loadError_))
-{
-    <div class="alert alert-danger">@loadError_</div>
-}
-else if (pans_.Count == 0)
-{
-    <p>No pans found.</p>
-}
-else
-{
-    <div class="mb-3">
-        <label for="pan-select" class="form-label">Select a pan</label>
-        <select id="pan-select"
-                class="form-select"
-                value="@selectedPanIndex_"
-                @onchange="OnPanChanged">
-            @for (var i = 0; i < pans_.Count; i++)
-            {
-                <option value="@i">@pans_[i].PanType.ToSpacedPascal()</option>
-            }
-        </select>
-    </div>
-
-    <div class="steel-pan__midi-controls mb-3">
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <InputFile class="form-control steel-pan__midi-input"
-                       OnChange="OnMidiSelected"
-                       accept=".mid,.midi" />
-
-            @if (midiTracks_.Count > 0)
-            {
-                <select class="form-select steel-pan__midi-track-select"
-                        value="@selectedTrackIndex_"
-                        @onchange="OnTrackChanged">
-                    @foreach (var track in midiTracks_)
-                    {
-                        <option value="@track.Index">
-                            <div>
-                                <span>
-                                    @(!string.IsNullOrWhiteSpace(track.Name)
-                                        ? $"Track {track.Index} - {track.Name}"
-                                        : $"Track {track.Index}")
-                                </span>
-                                <span> - </span>
-                                <span>@track.NoteCount Raw Notes</span>
-                            </div>
-                        </option>
-                    }
-                </select>
-            }
-
-            <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-primary"
-                        type="button"
-                        @onclick="PlayMidiAsync"
-                        disabled="@(midiEvents_.Count == 0 || isMidiPlaying_)">
-                    Play MIDI
-                </button>
-
-                <button class="btn btn-danger"
-                        type="button"
-                        @onclick="StopMidiAsync"
-                        disabled="@(!isMidiPlaying_)">
-                    Stop
-                </button>
-            </div>
+<div class="pans-page">
+    <div class="pans-page__hero">
+        <div>
+            <p class="pans-page__eyebrow">Interactive practice tool</p>
+            <h1 class="pans-page__title">Steel Pans</h1>
         </div>
     </div>
 
-    <div style="display: flex;">
-        <SteelPanView @ref="steelPanView_" Pan="@SelectedPan" />
-                
-        <Metronome IsPlaying="@isMidiPlaying_"
-                   Bpm="@(midiBpmOverride_ ?? metronomeBpm_)"
-                   BpmChanged="OnMetronomeBpmChanged"
-                   BeatsPerBar="@metronomeBeatsPerBar_"
-                   BeatUnit="@metronomeBeatUnit_"
-                   Enabled="@metronomeEnabled_"
-                   EnabledChanged="@(value => metronomeEnabled_ = value)"
-                   DisableBpmEditing="@(isMidiPlaying_ || selectedTrackInfo_ is null)" />
-    </div>
-}
+    @if (!string.IsNullOrWhiteSpace(loadError_))
+    {
+        <div class="alert alert-danger">@loadError_</div>
+    }
+    else if (pans_.Count == 0)
+    {
+        <div class="pans-page__empty">No pans found.</div>
+    }
+    else
+    {
+        <div class="pans-page__toolbar">
+            <div class="pans-page__field">
+                <label for="pan-select" class="form-label">Select a pan</label>
+                <select id="pan-select"
+                        class="form-select"
+                        value="@selectedPanIndex_"
+                        @onchange="OnPanChanged">
+                    @for (var i = 0; i < pans_.Count; i++)
+                    {
+                        <option value="@i">@pans_[i].PanType.ToSpacedPascal()</option>
+                    }
+                </select>
+            </div>
+
+            <div class="pans-page__field pans-page__field--wide">
+                <label class="form-label">MIDI file</label>
+
+                <div class="pans-page__midi">
+                    <div class="steel-pan__midi-controls">
+                        <div class="steel-pan__midi-row">
+                            <InputFile class="form-control steel-pan__midi-input"
+                                       OnChange="OnMidiSelected"
+                                       accept=".mid,.midi" />
+
+                            @if (midiTracks_.Count > 0)
+                            {
+                                <select class="form-select steel-pan__midi-track-select"
+                                        value="@selectedTrackIndex_"
+                                        @onchange="OnTrackChanged">
+                                    @foreach (var track in midiTracks_)
+                                    {
+                                        <option value="@track.Index">
+                                            @(!string.IsNullOrWhiteSpace(track.Name)
+                                                ? $"Track {track.Index} - {track.Name} - {track.NoteCount} raw notes"
+                                                : $"Track {track.Index} - {track.NoteCount} raw notes")
+                                        </option>
+                                    }
+                                </select>
+                            }
+
+                            <div class="steel-pan__midi-actions">
+                                <button class="btn btn-primary"
+                                        type="button"
+                                        @onclick="PlayMidiAsync"
+                                        disabled="@(midiEvents_.Count == 0 || isMidiPlaying_)">
+                                    Play
+                                </button>
+
+                                <button class="btn btn-outline-danger"
+                                        type="button"
+                                        @onclick="StopMidiAsync"
+                                        disabled="@(!isMidiPlaying_)">
+                                    Stop
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="pans-page__chord-bar">
+            <ChordBuilder OnChordSelected="SelectChordAsync"
+                          OnPlay="PlaySelectedNotesAsync" />
+        </div>
+
+        <div class="pans-page__content">
+            <div class="pans-page__instrument-full">
+                <SteelPanView @ref="steelPanView_" Pan="@SelectedPan" />
+            </div>
+
+            <aside class="pans-page__sidebar">
+                <Metronome IsPlaying="@isMidiPlaying_"
+                           Bpm="@(midiBpmOverride_ ?? metronomeBpm_)"
+                           BpmChanged="OnMetronomeBpmChanged"
+                           BeatsPerBar="@metronomeBeatsPerBar_"
+                           BeatUnit="@metronomeBeatUnit_"
+                           Enabled="@metronomeEnabled_"
+                           EnabledChanged="@(value => metronomeEnabled_ = value)"
+                           DisableBpmEditing="@(isMidiPlaying_ || selectedTrackInfo_ is null)" />
+            </aside>
+        </div>
+    }
+</div>
 
 @code {
     private readonly List<SteelPan> pans_ = [];
@@ -225,6 +243,22 @@ else
         StateHasChanged();
     }
 
+    private async Task SelectChordAsync(HashSet<int> pitchClasses)
+    {
+        if (steelPanView_ is null)
+            return;
+
+        await steelPanView_.SelectChordAsync(pitchClasses);
+    }
+
+    private async Task PlaySelectedNotesAsync()
+    {
+        if (steelPanView_ is null)
+            return;
+
+        await steelPanView_.PlaySelectedNotesAsync();
+    }
+
     private async Task PlayMidiAsync()
     {
         if (steelPanView_ is null || midiEvents_.Count == 0)
@@ -258,9 +292,7 @@ else
 
             var playbackEvents = GetPlaybackEvents();
 
-            await steelPanView_.PlayMidiSequenceAsync(
-                playbackEvents,
-                midiPlaybackCts_.Token);
+            await steelPanView_.PlayMidiSequenceAsync(playbackEvents, midiPlaybackCts_.Token);
 
             if (metronomeSyncTask is not null)
                 await metronomeSyncTask;
@@ -270,8 +302,6 @@ else
         }
         finally
         {
-            midiPlaybackCts_?.Dispose();
-            midiPlaybackCts_ = null;
             isMidiPlaying_ = false;
             StateHasChanged();
         }
@@ -279,10 +309,13 @@ else
 
     private async Task StopMidiAsync()
     {
-        midiPlaybackCts_?.Cancel();
-        midiPlaybackCts_?.Dispose();
-        midiPlaybackCts_ = null;
-
+        if (midiPlaybackCts_ is not null)
+        {
+            midiPlaybackCts_.Cancel();
+            midiPlaybackCts_.Dispose();
+            midiPlaybackCts_ = null;
+        }
+        
         await JS.InvokeVoidAsync("steelPan.stopMidiSchedule");
 
         isMidiPlaying_ = false;
@@ -290,63 +323,10 @@ else
         if (steelPanView_ is not null)
             await steelPanView_.StopMidiPlaybackAsync();
 
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
     }
 
-    private static List<MidiMetronomeChange> BuildMetronomeChanges(MidiPlaybackInfo? info)
-    {
-        if (info is null)
-            return [];
-
-        var changes = new List<MidiMetronomeChange>();
-
-        changes.AddRange(info.TempoChanges.Select(t => new MidiMetronomeChange
-        {
-            Time = t.Time,
-            Bpm = t.Bpm,
-        }));
-
-        changes.AddRange(info.TimeSignatureChanges.Select(ts => new MidiMetronomeChange
-        {
-            Time = ts.Time,
-            BeatsPerBar = ts.Numerator,
-            BeatUnit = ts.Denominator,
-        }));
-
-        return changes
-            .OrderBy(c => c.Time)
-            .ToList();
-    }
-
-    private async Task SyncMetronomeToMidiAsync(
-        MidiPlaybackInfo info,
-        CancellationToken cancellationToken)
-    {
-        var changes = BuildMetronomeChanges(info);
-        var stopwatch = Stopwatch.StartNew();
-
-        foreach (var change in changes)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var delay = change.Time - stopwatch.Elapsed;
-            if (delay > TimeSpan.Zero)
-                await Task.Delay(delay, cancellationToken);
-
-            if (change.Bpm is int bpm)
-                metronomeBpm_ = midiBpmOverride_ ?? bpm;
-
-            if (change.BeatsPerBar is int beatsPerBar)
-                metronomeBeatsPerBar_ = beatsPerBar;
-
-            if (change.BeatUnit is int beatUnit)
-                metronomeBeatUnit_ = beatUnit;
-
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private List<MidiPanEvent> GetPlaybackEvents()
+    private IReadOnlyList<MidiPanEvent> GetPlaybackEvents()
     {
         if (midiPlaybackInfo_ is null || midiBpmOverride_ is null)
             return midiEvents_;
@@ -369,9 +349,65 @@ else
             .ToList();
     }
 
-    private Task OnMetronomeBpmChanged(int value)
+    private async Task SyncMetronomeToMidiAsync(MidiPlaybackInfo playbackInfo, CancellationToken cancellationToken)
     {
-        midiBpmOverride_ = value;
+        var changes = BuildMetronomeChanges(playbackInfo);
+
+        foreach (var change in changes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (change.Time > TimeSpan.Zero)
+                await Task.Delay(change.Time, cancellationToken);
+
+            if (change.Bpm.HasValue)
+                metronomeBpm_ = change.Bpm.Value;
+
+            if (change.BeatsPerBar.HasValue)
+                metronomeBeatsPerBar_ = change.BeatsPerBar.Value;
+
+            if (change.BeatUnit.HasValue)
+                metronomeBeatUnit_ = change.BeatUnit.Value;
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private List<MidiMetronomeChange> BuildMetronomeChanges(MidiPlaybackInfo playbackInfo)
+    {
+        var changes = new List<MidiMetronomeChange>();
+
+        foreach (var tempo in playbackInfo.TempoChanges)
+        {
+            changes.Add(new MidiMetronomeChange
+            {
+                Time = tempo.Time,
+                Bpm = tempo.Bpm,
+            });
+        }
+
+        foreach (var ts in playbackInfo.TimeSignatureChanges)
+        {
+            changes.Add(new MidiMetronomeChange
+            {
+                Time = ts.Time,
+                BeatsPerBar = ts.Numerator,
+                BeatUnit = ts.Denominator,
+            });
+        }
+
+        return changes
+            .OrderBy(c => c.Time)
+            .ToList();
+    }
+
+    private Task OnMetronomeBpmChanged(int bpm)
+    {
+        if (midiPlaybackInfo_ is null || !isMidiPlaying_)
+            midiBpmOverride_ = bpm;
+
+        metronomeBpm_ = bpm;
+        StateHasChanged();
         return Task.CompletedTask;
     }
 }

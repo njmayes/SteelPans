@@ -1,45 +1,51 @@
 ﻿.steel-pan__root {
-    margin: 0.5rem;
+    margin: 0;
 }
 
 .steel-pan {
-    width: 100%;
-    max-width: 600px;
+    width: 75%;
     user-select: none;
 }
 
 .steel-pan--empty {
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+    background: rgba(248, 250, 252, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    color: #475569;
+}
+
+.steel-pan__canvas {
+    display: flex;
+    justify-content: center;
+    align-items: center;
     padding: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 0.5rem;
+    border-radius: 1.15rem;
+    background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    overflow: hidden;
+    min-height: 380px;
 }
 
 .steel-pan__svg {
     display: block;
-    width: 100%;
+    width: 0%;
+    max-width: 640px;
     height: auto;
+    margin: 0 auto;
 }
 
-.steel-pan__controls {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    margin-bottom: 1rem;
+.steel-pan__note-shape {
+    cursor: pointer;
 }
 
-    .steel-pan__controls .form-select {
-        max-width: 220px;
+.steel-pan__note-label {
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    .steel-pan__canvas {
+        min-height: 0;
+        padding: 0.85rem;
     }
-
-.steel-pan__hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.steel-pan__hint-sep {
-    opacity: 1;
-    font-weight: 600;
-    font-size: 1.5em;
-    margin: 0 0.4rem;
 }

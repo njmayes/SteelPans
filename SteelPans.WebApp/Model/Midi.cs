@@ -28,3 +28,26 @@ public sealed class MidiPanEvent
 
     public TimeSpan End => Start + Duration;
 }
+
+public sealed class MidiTempoChange
+{
+    public required TimeSpan Time { get; init; }
+    public required int Bpm { get; init; }
+}
+
+public sealed class MidiTimeSignatureChange
+{
+    public required TimeSpan Time { get; init; }
+    public required int Numerator { get; init; }
+    public required int Denominator { get; init; }
+}
+
+public sealed class MidiPlaybackInfo
+{
+    public required int InitialBpm { get; init; }
+    public required int InitialBeatsPerBar { get; init; }
+    public required int InitialBeatUnit { get; init; }
+
+    public List<MidiTempoChange> TempoChanges { get; init; } = [];
+    public List<MidiTimeSignatureChange> TimeSignatureChanges { get; init; } = [];
+}

@@ -3,6 +3,8 @@
     _audioBuffers: {},
     _audioContext: null,
     _scheduledSources: [],
+    _metronomeCtx: null,
+    _metronomeNodes: [],
 
     register: function (id, dotNetRef) {
         this._refs[id] = dotNetRef;
@@ -167,6 +169,60 @@
         }
 
         return note + accidental + octave;
+    },
+
+    _getMetronomeContext: function () {
+        if (!this._metronomeCtx) {
+            this._metronomeCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        return this._metronomeCtx;
+    },
+
+    playMetronomeTick: async function (isAccent) {
+        const ctx = this._getMetronomeContext();
+
+        if (ctx.state === "suspended") {
+            await ctx.resume();
+        }
+
+        const now = ctx.currentTime;
+
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        oscillator.type = "square";
+        oscillator.frequency.value = isAccent ? 1400 : 1000;
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(isAccent ? 0.25 : 0.15, now + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.07);
+
+        this._metronomeNodes.push(oscillator);
+
+        oscillator.onended = () => {
+            const index = this._metronomeNodes.indexOf(oscillator);
+            if (index >= 0) {
+                this._metronomeNodes.splice(index, 1);
+            }
+        };
+    },
+
+    stopMetronome: function () {
+        for (const node of this._metronomeNodes) {
+            try {
+                node.stop();
+            } catch {
+            }
+        }
+
+        this._metronomeNodes = [];
     }
 };
 

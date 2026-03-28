@@ -26,6 +26,79 @@ public sealed class MidiLoaderService
             .ToList();
     }
 
+    public async Task<MidiPlaybackInfo> GetPlaybackInfoAsync(
+    Stream midiStream,
+    CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(midiStream);
+
+        if (!midiStream.CanRead)
+            throw new ArgumentException("The MIDI stream must be readable.", nameof(midiStream));
+
+        await using var buffer = new MemoryStream();
+        await midiStream.CopyToAsync(buffer, cancellationToken);
+        buffer.Position = 0;
+
+        var midiFile = MidiFile.Read(buffer);
+        var tempoMap = midiFile.GetTempoMap();
+
+        var tempoChanges = new List<MidiTempoChange>();
+        var timeSignatureChanges = new List<MidiTimeSignatureChange>();
+
+        foreach (var timedEvent in midiFile.GetTimedEvents().OrderBy(e => e.Time))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var time = ToTimeSpan(TimeConverter.ConvertTo<MetricTimeSpan>(timedEvent.Time, tempoMap));
+
+            switch (timedEvent.Event)
+            {
+                case SetTempoEvent tempoEvent:
+                    tempoChanges.Add(new MidiTempoChange
+                    {
+                        Time = time,
+                        Bpm = (int)Math.Round(60_000_000d / tempoEvent.MicrosecondsPerQuarterNote),
+                    });
+                    break;
+
+                case TimeSignatureEvent timeSignatureEvent:
+                    timeSignatureChanges.Add(new MidiTimeSignatureChange
+                    {
+                        Time = time,
+                        Numerator = timeSignatureEvent.Numerator,
+                        Denominator = timeSignatureEvent.Denominator,
+                    });
+                    break;
+            }
+        }
+
+        var initialTempo = tempoChanges.FirstOrDefault(t => t.Time == TimeSpan.Zero)
+            ?? tempoChanges.FirstOrDefault()
+            ?? new MidiTempoChange
+            {
+                Time = TimeSpan.Zero,
+                Bpm = 120,
+            };
+
+        var initialTimeSignature = timeSignatureChanges.FirstOrDefault(t => t.Time == TimeSpan.Zero)
+            ?? timeSignatureChanges.FirstOrDefault()
+            ?? new MidiTimeSignatureChange
+            {
+                Time = TimeSpan.Zero,
+                Numerator = 4,
+                Denominator = 4,
+            };
+
+        return new MidiPlaybackInfo
+        {
+            InitialBpm = initialTempo.Bpm,
+            InitialBeatsPerBar = initialTimeSignature.Numerator,
+            InitialBeatUnit = initialTimeSignature.Denominator,
+            TempoChanges = tempoChanges,
+            TimeSignatureChanges = timeSignatureChanges,
+        };
+    }
+
     public async Task<List<MidiPanEvent>> LoadSingleTrackAsync(
         Stream midiStream,
         int trackIndex = 0,
@@ -36,7 +109,7 @@ public sealed class MidiLoaderService
         if (!midiStream.CanRead)
             throw new ArgumentException("The MIDI stream must be readable.", nameof(midiStream));
 
-        await using var buffer = new MemoryStream();
+        using var buffer = new MemoryStream();
         await midiStream.CopyToAsync(buffer, cancellationToken);
         buffer.Position = 0;
 
@@ -62,7 +135,10 @@ public sealed class MidiLoaderService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var startMetric = TimeConverter.ConvertTo<MetricTimeSpan>(midiNote.Time, tempoMap);
+            var startMetric = TimeConverter.ConvertTo<MetricTimeSpan>(
+                midiNote.Time,
+                tempoMap);
+
             var durationMetric = LengthConverter.ConvertTo<MetricTimeSpan>(
                 midiNote.Length,
                 midiNote.Time,

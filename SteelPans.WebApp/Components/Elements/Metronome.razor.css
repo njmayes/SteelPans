@@ -1,0 +1,153 @@
+﻿.metronome__bpm-input,
+.metronome__time-signature-input {
+    width: 90px;
+}
+
+.metronome__visual {
+    display: flex;
+    justify-content: center;
+}
+
+.metronome__visual--disabled {
+    opacity: 0.6;
+}
+
+.metronome__case {
+    position: relative;
+    width: 170px;
+    height: 240px;
+    clip-path: polygon(50% 0%, 82% 18%, 94% 100%, 6% 100%, 18% 18%);
+    background: linear-gradient(180deg, #9b6a3c 0%, #7b4f2a 45%, #5d391c 100%);
+    border: 3px solid #3e2411;
+    border-radius: 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 10px 24px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.metronome__arm-pivot {
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin-left: -7px;
+    border-radius: 50%;
+    background: #d7c3a3;
+    border: 2px solid #5a3a20;
+    z-index: 3;
+}
+
+.metronome__arm-wrap {
+    position: absolute;
+    inset: 34px 0 0 0;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.metronome__arm {
+    position: relative;
+    width: 10px;
+    height: 150px;
+    transform-origin: top center;
+    transition: transform 90ms ease-out;
+}
+
+.metronome__arm--left {
+    transform: rotate(-24deg);
+}
+
+.metronome__arm--right {
+    transform: rotate(24deg);
+}
+
+.metronome__arm-stick {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 4px;
+    height: 140px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: linear-gradient(180deg, #eee 0%, #bfc4cc 100%);
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.metronome__arm-weight {
+    position: absolute;
+    left: 50%;
+    top: 56px;
+    width: 28px;
+    height: 18px;
+    transform: translateX(-50%);
+    border-radius: 4px;
+    background: linear-gradient(180deg, #f0d56c 0%, #b88d1f 100%);
+    border: 1px solid rgba(70, 48, 8, 0.8);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.metronome__scale {
+    position: absolute;
+    left: 50%;
+    top: 48px;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    font-size: 0.68rem;
+    color: rgba(255, 248, 235, 0.72);
+    pointer-events: none;
+    user-select: none;
+}
+
+.metronome__light {
+    position: absolute;
+    bottom: 54px;
+    left: 50%;
+    width: 18px;
+    height: 18px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(60, 35, 17, 0.65);
+    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.35);
+    transition: background-color 60ms ease, box-shadow 60ms ease, transform 60ms ease;
+}
+
+.metronome__light--tick {
+    background: #8fd3ff;
+    box-shadow: 0 0 10px rgba(143, 211, 255, 0.8), inset 0 0 4px rgba(255, 255, 255, 0.4);
+    transform: translateX(-50%) scale(1.08);
+}
+
+.metronome__light--accent {
+    background: #ffb14a;
+    box-shadow: 0 0 12px rgba(255, 177, 74, 0.85), inset 0 0 4px rgba(255, 255, 255, 0.4);
+    transform: translateX(-50%) scale(1.12);
+}
+
+.metronome__beat-display {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 74px;
+    padding: 6px 10px;
+    text-align: center;
+    border-radius: 8px;
+    background: rgba(35, 20, 10, 0.45);
+    color: #fff6e8;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    line-height: 1;
+}
+
+.metronome__beat-number {
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.metronome__beat-total {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    margin-left: 2px;
+}

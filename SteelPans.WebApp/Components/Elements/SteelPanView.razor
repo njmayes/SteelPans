@@ -231,6 +231,7 @@
             .ThenBy(a => a.IsNoteOn ? 1 : 0)
             .ToList();
     }
+
     private static List<MidiPanScheduledAction> BuildScheduledActions(IEnumerable<MidiPanPlaybackAction> actions)
     {
         return actions

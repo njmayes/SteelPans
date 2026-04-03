@@ -368,11 +368,10 @@
         if (!trackElement || !dotNetRef)
             return;
 
-        const rect = trackElement.getBoundingClientRect();
-
         const update = (clientY) => {
+            const rect = trackElement.getBoundingClientRect();
             const localY = clientY - rect.top;
-            dotNetRef.invokeMethodAsync("OnMetronomeWeightDragged", localY);
+            dotNetRef.invokeMethodAsync("OnMetronomeWeightDragged", localY, rect.height);
         };
 
         const onPointerMove = (event) => {

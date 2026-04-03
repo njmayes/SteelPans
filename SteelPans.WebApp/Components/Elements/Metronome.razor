@@ -113,7 +113,7 @@
                     <div class="metronome__arm-weight-track" @ref="weightTrackRef_">
                         <button class="metronome__arm-weight @(CanDragWeight ? "metronome__arm-weight--draggable" : "metronome__arm-weight--locked")"
                                 type="button"
-                                style="@($"top: {WeightTopPx:F1}px;")"
+                                style="@($"top: {WeightTopPercent:F3}%;")"
                                 @onpointerdown="BeginWeightDragAsync"
                                 disabled="@(!CanDragWeight)"
                                 tabindex="-1"
@@ -123,9 +123,9 @@
             </div>
 
             <div class="metronome__scale">
-                <span>Largo</span>
-                <span>Andante</span>
-                <span>Allegro</span>
+                <span class="metronome__scale-label metronome__scale-label--largo">Largo</span>
+                <span class="metronome__scale-label metronome__scale-label--andante">Andante</span>
+                <span class="metronome__scale-label metronome__scale-label--allegro">Allegro</span>
             </div>
 
             <div class="metronome__light @(tickFlash_ ? (accentFlash_ ? "metronome__light--accent" : "metronome__light--tick") : null)"></div>
@@ -169,13 +169,17 @@
     private const int MinBpm = 20;
     private const int MaxBpm = 200;
 
-    private const double WeightMinTopPx = 0.0;
-    private const double WeightMaxTopPx = 146.0;
-    private const double WeightHeightPx = 21.0;
+    // Original design values converted to track-relative ratios.
+    // Base design track height was 167px, with the draggable weight 21px tall.
+    private const double DesignTrackHeightPx = 167.0;
+    private const double WeightHeightRatio = 21.0 / DesignTrackHeightPx;
 
-    private const double LargoTopPx = 14.0;
-    private const double AndanteTopPx = 64.0;
-    private const double AllegroTopPx = 116.0;
+    private const double WeightMinTopRatio = 0.0;
+    private const double WeightMaxTopRatio = 146.0 / DesignTrackHeightPx;
+
+    private const double LargoTopRatio = 14.0 / DesignTrackHeightPx;
+    private const double AndanteTopRatio = 64.0 / DesignTrackHeightPx;
+    private const double AllegroTopRatio = 116.0 / DesignTrackHeightPx;
 
     private const int LargoBpm = 52;
     private const int AndanteBpm = 92;
@@ -229,7 +233,7 @@
         ? 0.0
         : armAngleDeg_;
 
-    private double WeightTopPx => GetWeightTopPx(Bpm);
+    private double WeightTopPercent => GetWeightTopRatio(Bpm) * 100.0;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -259,12 +263,12 @@
     }
 
     [JSInvokable]
-    public async Task OnMetronomeWeightDragged(double localPointerY)
+    public async Task OnMetronomeWeightDragged(double localPointerY, double trackHeightPx)
     {
         if (!CanDragWeight)
             return;
 
-        var bpm = GetBpmFromPointerY(localPointerY);
+        var bpm = GetBpmFromPointerY(localPointerY, trackHeightPx);
         await SetBpmAsync(bpm);
     }
 
@@ -274,7 +278,7 @@
         await StopMidiVisualSyncAsync(resetVisuals: resetVisuals);
 
         playState_ = PlayState.NotPlaying;
-        
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -469,7 +473,7 @@
 
         if (!Enabled || !jsAvailable_)
             return;
-            
+
         playState_ = PlayState.MIDI;
         midiVisualCts_ = new CancellationTokenSource();
         lastFlashedBeatIndex_ = null;
@@ -627,43 +631,47 @@
         return result < 0 ? result + modulus : result;
     }
 
-    private static double GetWeightTopPx(int bpm)
+    private static double GetWeightTopRatio(int bpm)
     {
         bpm = Math.Clamp(bpm, MinBpm, MaxBpm);
 
         if (bpm <= LargoBpm)
-            return double.Lerp(WeightMinTopPx, LargoTopPx, InverseLerp(MinBpm, LargoBpm, bpm));
+            return double.Lerp(WeightMinTopRatio, LargoTopRatio, InverseLerp(MinBpm, LargoBpm, bpm));
 
         if (bpm <= AndanteBpm)
-            return double.Lerp(LargoTopPx, AndanteTopPx, InverseLerp(LargoBpm, AndanteBpm, bpm));
+            return double.Lerp(LargoTopRatio, AndanteTopRatio, InverseLerp(LargoBpm, AndanteBpm, bpm));
 
         if (bpm <= AllegroBpm)
-            return double.Lerp(AndanteTopPx, AllegroTopPx, InverseLerp(AndanteBpm, AllegroBpm, bpm));
+            return double.Lerp(AndanteTopRatio, AllegroTopRatio, InverseLerp(AndanteBpm, AllegroBpm, bpm));
 
-        return double.Lerp(AllegroTopPx, WeightMaxTopPx, InverseLerp(AllegroBpm, MaxBpm, bpm));
+        return double.Lerp(AllegroTopRatio, WeightMaxTopRatio, InverseLerp(AllegroBpm, MaxBpm, bpm));
     }
 
-    private static int GetBpmFromPointerY(double localPointerY)
+    private static int GetBpmFromPointerY(double localPointerY, double trackHeightPx)
     {
-        var top = Math.Clamp(localPointerY - (WeightHeightPx / 2.0), WeightMinTopPx, WeightMaxTopPx);
+        if (trackHeightPx <= 0.0)
+            return MinBpm;
+
+        var pointerRatio = localPointerY / trackHeightPx;
+        var topRatio = Math.Clamp(pointerRatio - (WeightHeightRatio / 2.0), WeightMinTopRatio, WeightMaxTopRatio);
 
         double bpm;
 
-        if (top <= LargoTopPx)
+        if (topRatio <= LargoTopRatio)
         {
-            bpm = double.Lerp(MinBpm, LargoBpm, InverseLerp(WeightMinTopPx, LargoTopPx, top));
+            bpm = double.Lerp(MinBpm, LargoBpm, InverseLerp(WeightMinTopRatio, LargoTopRatio, topRatio));
         }
-        else if (top <= AndanteTopPx)
+        else if (topRatio <= AndanteTopRatio)
         {
-            bpm = double.Lerp(LargoBpm, AndanteBpm, InverseLerp(LargoTopPx, AndanteTopPx, top));
+            bpm = double.Lerp(LargoBpm, AndanteBpm, InverseLerp(LargoTopRatio, AndanteTopRatio, topRatio));
         }
-        else if (top <= AllegroTopPx)
+        else if (topRatio <= AllegroTopRatio)
         {
-            bpm = double.Lerp(AndanteBpm, AllegroBpm, InverseLerp(AndanteTopPx, AllegroTopPx, top));
+            bpm = double.Lerp(AndanteBpm, AllegroBpm, InverseLerp(AndanteTopRatio, AllegroTopRatio, topRatio));
         }
         else
         {
-            bpm = double.Lerp(AllegroBpm, MaxBpm, InverseLerp(AllegroTopPx, WeightMaxTopPx, top));
+            bpm = double.Lerp(AllegroBpm, MaxBpm, InverseLerp(AllegroTopRatio, WeightMaxTopRatio, topRatio));
         }
 
         return (int)Math.Round(Math.Clamp(bpm, MinBpm, MaxBpm));

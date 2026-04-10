@@ -15,7 +15,7 @@ public partial class Pans
 
     private IBrowserFile? midiFile_;
     private string? midiFileName_;
-    private List<MidiTrackPlaceholderOption> midiTrackOptions_ = [];
+    private List<MidiTrackOption> midiTrackOptions_ = [];
     private int? selectedTrackIndex_;
 
     private MidiPlaybackInfo? midiPlaybackInfo_;
@@ -57,7 +57,7 @@ public partial class Pans
         public required bool IsAccent { get; init; }
     }
 
-    private sealed class MidiTrackPlaceholderOption
+    private sealed class MidiTrackOption
     {
         public required int Index { get; init; }
         public required string Label { get; init; }
@@ -105,21 +105,18 @@ public partial class Pans
             metronomeBeatUnit_ = midiPlaybackInfo_.InitialBeatUnit;
         }
 
-        midiTrackOptions_ =
-        [
-            new MidiTrackPlaceholderOption
-            {
-                Index = 0,
-                Label = "All tracks merged"
-            },
-            new MidiTrackPlaceholderOption
-            {
-                Index = 1,
-                Label = "Track selection unavailable"
-            }
-        ];
+        await using (var trackInfoStream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024))
+        {
+            var trackInfos = await MidiLoader.GetTrackInfosAsync(trackInfoStream);
 
-        selectedTrackIndex_ = midiTrackOptions_[0].Index;
+            midiTrackOptions_ = trackInfos
+                .Where(t => t.NoteCount > 0)
+                .Select(BuildTrackOption)
+                .ToList();
+        }
+
+        selectedTrackIndex_ = midiTrackOptions_
+            .FirstOrDefault(x => x.Index >= 0)?.Index;
 
         await ReloadSelectedTrackAsync();
     }
@@ -130,9 +127,6 @@ public partial class Pans
             return;
 
         selectedTrackIndex_ = trackIndex;
-
-        // Placeholder for when per-track selection comes back.
-        // For now all MIDI is always loaded as a merged sequence.
         await ReloadSelectedTrackAsync();
     }
 
@@ -149,7 +143,7 @@ public partial class Pans
     {
         await StopMidiAsync();
 
-        if (midiFile_ is null)
+        if (midiFile_ is null || selectedTrackIndex_ is null)
         {
             midiEvents_.Clear();
             playbackDuration_ = TimeSpan.Zero;
@@ -161,7 +155,9 @@ public partial class Pans
 
         await using var stream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
 
-        var rawEvents = await MidiLoader.LoadMergedMidiAsync(stream);
+        var rawEvents = await MidiLoader.LoadSingleTrackAsync(
+            stream,
+            selectedTrackIndex_.Value);
 
         midiEvents_ = SelectedPan is not null
             ? PanMidiMapper.FilterToPan(SelectedPan, rawEvents)
@@ -199,20 +195,10 @@ public partial class Pans
         showMetronomePanel_ = false;
     }
 
-    private void CloseChordBuilderPanel()
-    {
-        showChordBuilderPanel_ = false;
-    }
-
     private void ToggleMetronomePanel()
     {
         showMetronomePanel_ = !showMetronomePanel_;
         showChordBuilderPanel_ = false;
-    }
-
-    private void CloseMetronomePanel()
-    {
-        showMetronomePanel_ = false;
     }
 
     private async Task ToggleMidiAsync()
@@ -425,7 +411,7 @@ public partial class Pans
         return actions;
     }
 
-    private Task OnMetronomeBpmChanged(int bpm)
+    private Task OnMetronomeBpmChangedAsync(int bpm)
     {
         metronomeBpm_ = bpm;
 
@@ -435,19 +421,19 @@ public partial class Pans
         return Task.CompletedTask;
     }
 
-    private Task OnMetronomeBeatsPerBarChanged(int beatsPerBar)
+    private Task OnMetronomeBeatsPerBarChangedAsync(int beatsPerBar)
     {
         metronomeBeatsPerBar_ = beatsPerBar;
         return Task.CompletedTask;
     }
 
-    private Task OnMetronomeBeatUnitChanged(int beatUnit)
+    private Task OnMetronomeBeatUnitChangedAsync(int beatUnit)
     {
         metronomeBeatUnit_ = beatUnit;
         return Task.CompletedTask;
     }
 
-    private async Task OnMetronomeEnabledChanged(bool enabled)
+    private async Task OnMetronomeEnabledChangedAsync(bool enabled)
     {
         metronomeEnabled_ = enabled;
 
@@ -606,5 +592,18 @@ public partial class Pans
             {
             }
         }, cancellationToken);
+    }
+
+    private static MidiTrackOption BuildTrackOption(MidiTrackInfo track)
+    {
+        var name = string.IsNullOrWhiteSpace(track.Name)
+            ? $"Track {track.Index + 1}"
+            : $"Track {track.Index + 1}: {track.Name}";
+
+        return new MidiTrackOption
+        {
+            Index = track.Index,
+            Label = $"{name} ({track.NoteCount} notes)"
+        };
     }
 }

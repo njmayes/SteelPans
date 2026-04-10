@@ -152,7 +152,7 @@ public sealed class MidiLoaderService
             });
         }
 
-        return events;
+        return events.Where(x => x.Duration > TimeSpan.Zero).ToList();
     }
 
 
@@ -202,7 +202,7 @@ public sealed class MidiLoaderService
             });
         }
 
-        return events;
+        return events.Where(x => x.Duration > TimeSpan.Zero).ToList();
     }
     private static TimeSpan ToTimeSpan(MetricTimeSpan m)
         => TimeSpan.FromHours(m.Hours)

@@ -66,8 +66,8 @@
                         </div>
                     </div>
                 </div>
-
             </div>
+
             <div class="pans-page__playback-control">
                 <MidiPlaybackControl CurrentTime="@playbackPosition_"
                                      TotalTime="@playbackDuration_"
@@ -87,61 +87,33 @@
         <div class="pans-page__content">
             <div class="pans-page__main">
                 <div class="pans-page__main-toggles">
-                    <div class="pans-page__overlay-shell pans-page__overlay-shell--left @(showChordBuilderPanel_ ? "pans-page__overlay-shell--open" : "pans-page__overlay-shell--closed")">
-                        <div class="pans-page__overlay-shell-container">
-                            <button class="pans-page__overlay-toggle pans-page__overlay-toggle--left pans-page__overlay-toggle--shell"
-                                    type="button"
-                                    @onclick="ToggleChordBuilderPanel"
-                                    aria-label="Toggle chord builder"
-                                    aria-expanded="@showChordBuilderPanel_"
-                                    aria-controls="chord-builder-panel">
-                                <span class="pans-page__overlay-toggle-icon bi @(showChordBuilderPanel_ ? "bi-x-lg" : "bi-music-note-list")" aria-hidden="true"></span>
-                                <span class="pans-page__overlay-toggle-label">Chord Builder</span>
-                            </button>
-                        </div>
+                    <OverlayShell Side="left"
+                                  Label="Chords"
+                                  IconClass="bi bi-music-note-list"
+                                  IsOpen="@showChordBuilderPanel_"
+                                  IsOpenChanged="@(value => showChordBuilderPanel_ = value)">
+                        <ChordBuilder OnChordSelected="SelectChordAsync"
+                                      OnPlay="PlaySelectedNotesAsync" />
+                    </OverlayShell>
 
-                        <section id="chord-builder-panel"
-                                 class="pans-page__overlay-panel-body-wrap @(showChordBuilderPanel_ ? "pans-page__overlay-panel-body-wrap--open" : "pans-page__overlay-panel-body-wrap--closed")"
-                                 aria-label="Chord builder panel"
-                                 aria-hidden="@(!showChordBuilderPanel_)">
-                            <div class="pans-page__overlay-panel-body">
-                                <ChordBuilder OnChordSelected="SelectChordAsync"
-                                              OnPlay="PlaySelectedNotesAsync" />
-                            </div>
-                        </section>
-                    </div>
-
-                    <div class="pans-page__overlay-shell pans-page__overlay-shell--right @(showMetronomePanel_ ? "pans-page__overlay-shell--open" : "pans-page__overlay-shell--closed")">
-                        <div class="pans-page__overlay-shell-container">
-                            <button class="pans-page__overlay-toggle pans-page__overlay-toggle--right pans-page__overlay-toggle--shell"
-                                    type="button"
-                                    @onclick="ToggleMetronomePanel"
-                                    aria-label="Toggle metronome"
-                                    aria-expanded="@showMetronomePanel_"
-                                    aria-controls="metronome-panel">
-                                <span class="pans-page__overlay-toggle-label">Metronome</span>
-                                <span class="pans-page__overlay-toggle-icon bi @(showMetronomePanel_ ? "bi-x-lg" : "bi-stopwatch")" aria-hidden="true"></span>
-                            </button>
-                        </div>
-
-                        <section id="metronome-panel"
-                                 class="pans-page__overlay-panel-body-wrap pans-page__overlay-panel-body-wrap--metronome @(showMetronomePanel_ ? "pans-page__overlay-panel-body-wrap--open" : "pans-page__overlay-panel-body-wrap--closed")"
-                                 aria-label="Metronome panel"
-                                 aria-hidden="@(!showMetronomePanel_)">
-                            <div class="pans-page__overlay-panel-body pans-page__overlay-panel-body--metronome">
-                                <Metronome @ref="metronome_"
-                                           MidiStartAt="@midiStartAt_"
-                                           Bpm="@metronomeBpm_"
-                                           BpmChanged="OnMetronomeBpmChanged"
-                                           BeatsPerBar="@metronomeBeatsPerBar_"
-                                           BeatsPerBarChanged="OnMetronomeBeatsPerBarChanged"
-                                           BeatUnit="@metronomeBeatUnit_"
-                                           BeatUnitChanged="OnMetronomeBeatUnitChanged"
-                                           Enabled="@metronomeEnabled_"
-                                           EnabledChanged="OnMetronomeEnabledChanged" />
-                            </div>
-                        </section>
-                    </div>
+                    <OverlayShell Side="right"
+                                  Label="Metronome"
+                                  IconClass="bi bi-music-note-beamed"
+                                  IsOpen="@showMetronomePanel_"
+                                  IsOpenChanged="@(value => showMetronomePanel_ = value)"
+                                  PanelVariantClass="pans-page__overlay-panel-body-wrap--metronome"
+                                  BodyVariantClass="pans-page__overlay-panel-body--metronome">
+                        <Metronome @ref="metronome_"
+                                   Enabled="@metronomeEnabled_"
+                                   EnabledChanged="OnMetronomeEnabledChangedAsync"
+                                   Bpm="@metronomeBpm_"
+                                   BpmChanged="OnMetronomeBpmChangedAsync"
+                                   BeatsPerBar="@metronomeBeatsPerBar_"
+                                   BeatsPerBarChanged="OnMetronomeBeatsPerBarChangedAsync"
+                                   BeatUnit="@metronomeBeatUnit_"
+                                   BeatUnitChanged="OnMetronomeBeatUnitChangedAsync"
+                                   MidiStartAt="@midiStartAt_" />
+                    </OverlayShell>
                 </div>
 
                 <div class="pans-page__instrument-full">

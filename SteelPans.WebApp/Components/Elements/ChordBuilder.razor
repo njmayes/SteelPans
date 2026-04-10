@@ -2,41 +2,37 @@
 
 <div class="steel-pan__chord-builder">
     <div class="steel-pan__chord-selector">
-        <div class="steel-pan__chord-group">
-            <div class="steel-pan__chord-row">
-                <select class="form-select steel-pan__chord-select steel-pan__chord-select--note"
-                        value="@rootLetter_"
-                        @onchange="OnRootLetterChanged">
-                    @foreach (var letter in Enum.GetValues<NoteLetter>())
-                    {
-                        <option value="@letter">@letter</option>
-                    }
-                </select>
-
-                <select class="form-select steel-pan__chord-select steel-pan__chord-select--accidental"
-                        value="@rootAccidental_"
-                        @onchange="OnRootAccidentalChanged">
-                    <option value="-1">♭</option>
-                    <option value="0">♮</option>
-                    <option value="1">♯</option>
-                </select>
-            </div>
-        </div>
-        <div class="steel-pan__chord-group steel-pan__chord-group--type">
-            <select class="form-select steel-pan__chord-select"
-                    value="@selectedChord_"
-                    @onchange="OnChordChanged">
-                @foreach (var chord in chordOptions_.Keys)
+        <div class="steel-pan__chord-select--note">
+            <select class="form-select steel-pan__chord-select--tone"
+                    value="@rootLetter_"
+                    @onchange="OnRootLetterChanged">
+                @foreach (var letter in Enum.GetValues<NoteLetter>())
                 {
-                    <option value="@chord">@chord</option>
+                    <option value="@letter">@letter</option>
                 }
             </select>
+
+            <select class="form-select steel-pan__chord-select--accidental"
+                    value="@rootAccidental_"
+                    @onchange="OnRootAccidentalChanged">
+                <option value="-1">♭</option>
+                <option value="0">♮</option>
+                <option value="1">♯</option>
+            </select>
         </div>
+        <select class="form-select steel-pan__chord-select--scale"
+                value="@selectedChord_"
+                @onchange="OnChordChanged">
+            @foreach (var chord in chordOptions_.Keys)
+            {
+                <option value="@chord">@chord</option>
+            }
+        </select>
     </div>
 
 
     <div class="steel-pan__chord-actions">
-        <div class="steel-pan__chord-note-set">
+        <div class="steel-pan__chord-set">
             <button class="btn btn-outline-secondary"
                     type="button"
                     @onclick="ClearChordAsync">

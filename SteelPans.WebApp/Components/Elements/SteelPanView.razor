@@ -12,7 +12,7 @@
 {
     <div class="steel-pan__root">
         <div class="steel-pan__canvas">
-            <div class="steel-pan @Class" style="@Style">
+            <div class="steel-pan">
                 @((MarkupString)panSvg_)
             </div>
         </div>
@@ -30,12 +30,6 @@ else
 
     [Parameter, EditorRequired]
     public SteelPan? Pan { get; set; }
-
-    [Parameter]
-    public string? Class { get; set; }
-
-    [Parameter]
-    public string? Style { get; set; }
 
     private readonly string componentId_ = $"steelpan_{Guid.NewGuid():N}";
     private DotNetObjectReference<SteelPanView>? selfRef_;
@@ -105,16 +99,13 @@ else
     }
 
     [JSInvokable]
-    public async Task HandleNoteInteraction(string noteKey, bool shiftKey)
+    public async Task HandleNoteInteraction(string noteKey)
     {
         if (Pan is null)
             return;
 
         var note = Pan.Notes.FirstOrDefault(n => n.ToString() == noteKey);
         if (note is null)
-            return;
-
-        if (!shiftKey)
             return;
 
         note.Selected = !note.Selected;

@@ -95,7 +95,7 @@
         }
     },
 
-    noteClick: async function (element, componentId, noteKey, event) {
+    noteClick: async function (noteElement, labelElement, componentId, noteKey, event) {
         event.stopPropagation();
 
         const ref = this._refs[componentId];
@@ -104,18 +104,27 @@
 
         const shift = !!event.shiftKey;
 
-        if (!shift && !element.classList.contains("sp-note--active")) {
-            await this.playNote(noteKey);
+        if (shift) {
+            ref.invokeMethodAsync("HandleNoteInteraction", noteKey);
+            return;
+        }
 
-            element.classList.add("sp-note--flash");
+        if (!noteElement.classList.contains("sp-note--om")) {
+            await this.playNote(noteKey);
+            noteElement.classList.add("sp-note--flash");
 
             setTimeout(() => {
-                element.classList.remove("sp-note--flash");
+                noteElement.classList.remove("sp-note--flash");
             }, 120);
         }
 
-        if (shift)
-            ref.invokeMethodAsync("HandleNoteInteraction", noteKey);
+        if (!labelElement.classList.contains("sp-label--on")) {
+            labelElement.classList.add("sp-label--flash");
+
+            setTimeout(() => {
+                labelElement.classList.remove("sp-label--flash");
+            }, 120);
+        }
     },
 
     playMidiSchedule: async function (scheduledActions) {

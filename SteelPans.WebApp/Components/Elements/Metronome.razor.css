@@ -2,7 +2,7 @@
     --metro-control-height: clamp(2.35rem, 1.95rem + 0.8vw, 3rem);
     --metro-control-radius: clamp(0.72rem, 0.6rem + 0.28vw, 0.95rem);
     --metro-control-font-size: clamp(0.84rem, 0.76rem + 0.22vw, 1rem);
-    --metro-label-font-size: clamp(0.64rem, 0.6rem + 0.12vw, 0.74rem);
+    --metro-label-font-size: min(0.45rem + 0.1vw, 0.54rem);
     --metro-control-pad-x: clamp(0.68rem, 0.58rem + 0.22vw, 0.95rem);
     --metro-spinner-width: clamp(1.9rem, 1.55rem + 0.55vw, 2.4rem);
     --metro-arrow-size: clamp(0.38rem, 0.32rem + 0.12vw, 0.5rem);
@@ -16,7 +16,7 @@
     gap: var(--metro-gap);
     min-height: 0;
     height: auto;
-    transition: grid-template-rows 220ms ease, gap 220ms ease;
+    transition: grid-template-rows 160ms ease, gap 160ms ease;
 }
 
 .metronome__controls {
@@ -27,7 +27,7 @@
     align-self: stretch;
     min-height: 0;
     align-content: start;
-    transition: padding 220ms ease;
+    transition: padding 160ms ease;
 }
 
 .metronome__header {
@@ -81,7 +81,7 @@
         line-height: 1;
         text-align: center;
         white-space: nowrap;
-        transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease, background-color 120ms ease, border-color 120ms ease;
+        transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
     }
 
         .metronome__status-toggle .badge.text-bg-success {
@@ -250,7 +250,7 @@
     appearance: none;
     -webkit-appearance: none;
     box-shadow: none;
-    transition: background-color 120ms ease, color 120ms ease, filter 120ms ease;
+    transition: background-color 160ms ease, color 160ms ease, filter 160ms ease;
 }
 
 .metronome__number-button--up {
@@ -318,7 +318,7 @@
     opacity: 1;
     transform: scale(1);
     max-height: none;
-    transition: opacity 180ms ease, transform 220ms ease, max-height 220ms ease, margin 220ms ease, padding 220ms ease;
+    transition: opacity 160ms ease, transform 160ms ease, max-height 160ms ease, margin 160ms ease, padding 160ms ease;
 }
 
 .metronome__visual--disabled {
@@ -623,7 +623,7 @@
     .metronome__inputs {
         display: grid;
         grid-template-columns: 1fr;
-        gap: calc(2 * var(--metro-gap));
+        gap: var(--metro-gap);
         min-height: 0;
         height: auto;
         block-size: auto;
@@ -645,6 +645,11 @@
         opacity: 1;
         transform: none;
         align-self: start;
+    }
+
+    .metronome__visual--disabled {
+        opacity: 0.46;
+        transform: scale(0.985);
     }
 
     .metronome__case {

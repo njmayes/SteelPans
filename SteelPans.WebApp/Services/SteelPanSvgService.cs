@@ -1,20 +1,48 @@
 ﻿using System.Text;
-using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using SteelPans.WebApp.Model;
 
 namespace SteelPans.WebApp.Services;
 
 public sealed class SteelPanSvgService
 {
+    private static readonly HashSet<string> ShapeTags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "path",
+        "rect",
+        "ellipse",
+        "circle",
+        "polygon",
+        "polyline"
+    };
+
+    private static readonly Dictionary<string, string[]> EnharmonicSpellings = new(StringComparer.Ordinal)
+    {
+        ["A#"] = ["A#", "Bb"],
+        ["Bb"] = ["Bb", "A#"],
+
+        ["C#"] = ["C#", "Db"],
+        ["Db"] = ["Db", "C#"],
+
+        ["D#"] = ["D#", "Eb"],
+        ["Eb"] = ["Eb", "D#"],
+
+        ["F#"] = ["F#", "Gb"],
+        ["Gb"] = ["Gb", "F#"],
+
+        ["G#"] = ["G#", "Ab"],
+        ["Ab"] = ["Ab", "G#"]
+    };
+
     private readonly IWebHostEnvironment env_;
 
     private readonly Dictionary<string, string> fileCache_ = new();
-    private readonly Dictionary<string, string> masterSvgCache_ = new();
-    private readonly Dictionary<string, string> masterSkeletonCache_ = new();
+    private readonly Dictionary<string, XDocument> masterDocCache_ = new();
+    private readonly Dictionary<string, string> skeletonCache_ = new();
 
-    // Prebuilt note fragments without component-specific onclick.
     // key = "{relativePath}|{noteKey}|on/off"
-    private readonly Dictionary<string, string> noteFragmentCache_ = new();
+    // value = (noteFragmentTemplate, labelFragmentTemplate)
+    private readonly Dictionary<string, (string, string)> noteFragmentCache_ = new();
 
     public SteelPanSvgService(IWebHostEnvironment env)
     {
@@ -25,11 +53,11 @@ public sealed class SteelPanSvgService
         string relativePath,
         IEnumerable<PanNote> notes)
     {
-        var masterSvg = await GetMasterSvgAsync(relativePath);
-        if (string.IsNullOrWhiteSpace(masterSvg))
+        var masterDoc = await GetMasterDocumentAsync(relativePath);
+        if (masterDoc is null)
             return;
 
-        _ = GetOrBuildMasterSkeleton(relativePath, masterSvg);
+        _ = GetOrBuildSkeleton(relativePath, masterDoc);
 
         var noteKeys = notes
             .Select(n => n.ToString())
@@ -49,63 +77,107 @@ public sealed class SteelPanSvgService
         string componentId,
         IEnumerable<PanNote> notes)
     {
-        var masterSvg = await GetMasterSvgAsync(relativePath);
-        if (string.IsNullOrWhiteSpace(masterSvg))
+        var masterDoc = await GetMasterDocumentAsync(relativePath);
+        if (masterDoc is null)
             return string.Empty;
 
-        var skeleton = GetOrBuildMasterSkeleton(relativePath, masterSvg);
+        var skeleton = GetOrBuildSkeleton(relativePath, masterDoc);
 
         var noteMarkup = new StringBuilder();
-        var activeNotes = new HashSet<string>(
-            notes.Where(n => n.Active).Select(n => n.ToString()),
-            StringComparer.Ordinal);
+        var labelMarkup = new StringBuilder();
 
         foreach (var note in notes)
         {
-            var template = await GetNoteFragmentTemplateAsync(
+            var (noteTemplate, labelTemplate) = await GetNoteFragmentTemplateAsync(
                 relativePath,
                 note.ToString(),
                 note.Active);
 
-            if (string.IsNullOrWhiteSpace(template))
+            if (string.IsNullOrWhiteSpace(noteTemplate))
                 continue;
 
-            var fragment = BindNoteFragmentToComponent(template, componentId, note.ToString());
-            noteMarkup.Append(fragment);
+            var labelElementId = BuildLabelElementId(componentId, note.ToString());
+
+            noteMarkup.Append(
+                BindNoteFragmentToComponent(
+                    noteTemplate,
+                    componentId,
+                    note.ToString(),
+                    labelElementId));
+
+            if (!string.IsNullOrWhiteSpace(labelTemplate))
+            {
+                labelMarkup.Append(
+                    BindLabelFragmentToComponent(
+                        labelTemplate,
+                        note.ToString(),
+                        labelElementId));
+            }
         }
 
-        var rebuilt = skeleton.Replace("<!-- NOTE_SHAPES -->", noteMarkup.ToString());
-        rebuilt = MoveLabelsToEnd(rebuilt, activeNotes);
+        var rebuilt = skeleton.Replace("<!-- NOTE_SHAPES -->", noteMarkup.ToString(), StringComparison.Ordinal);
+
+        if (labelMarkup.Length > 0)
+            rebuilt = rebuilt.Replace("</svg>", labelMarkup + "</svg>", StringComparison.Ordinal);
 
         return rebuilt;
     }
 
-    private async Task<string> GetMasterSvgAsync(string relativePath)
+    private async Task<XDocument?> GetMasterDocumentAsync(string relativePath)
     {
-        if (masterSvgCache_.TryGetValue(relativePath, out var cached))
-            return cached;
+        if (masterDocCache_.TryGetValue(relativePath, out var cached))
+            return new XDocument(cached);
 
         var svg = await LoadSvgFileAsync(relativePath);
         if (string.IsNullOrWhiteSpace(svg))
-            return string.Empty;
+            return null;
 
-        svg = RewriteRootSvg(svg, "sp-svg");
+        XDocument doc;
+        try
+        {
+            doc = XDocument.Parse(svg, LoadOptions.PreserveWhitespace);
+        }
+        catch
+        {
+            return null;
+        }
 
-        masterSvgCache_[relativePath] = svg;
-        return svg;
+        RewriteRootSvg(doc, "sp-svg");
+
+        masterDocCache_[relativePath] = new XDocument(doc);
+        return new XDocument(doc);
     }
 
-    private string GetOrBuildMasterSkeleton(string relativePath, string masterSvg)
+    private string GetOrBuildSkeleton(string relativePath, XDocument masterDoc)
     {
-        if (masterSkeletonCache_.TryGetValue(relativePath, out var cached))
+        if (skeletonCache_.TryGetValue(relativePath, out var cached))
             return cached;
 
-        var skeleton = StripNoteShapes(masterSvg);
-        masterSkeletonCache_[relativePath] = skeleton;
-        return skeleton;
+        var skeletonDoc = new XDocument(masterDoc);
+        var root = skeletonDoc.Root;
+        if (root is null)
+            return string.Empty;
+
+        var noteElements = FindNoteElements(root).ToList();
+        foreach (var noteElement in noteElements)
+        {
+            noteElement.Remove();
+        }
+
+        var labelElements = FindLabelElements(root).ToList();
+        foreach (var labelElement in labelElements)
+        {
+            labelElement.Remove();
+        }
+
+        root.Add(new XComment(" NOTE_SHAPES "));
+
+        var result = SerializeDocument(skeletonDoc);
+        skeletonCache_[relativePath] = result;
+        return result;
     }
 
-    private async Task<string> GetNoteFragmentTemplateAsync(
+    private async Task<(string NoteFragment, string LabelFragment)> GetNoteFragmentTemplateAsync(
         string relativePath,
         string noteKey,
         bool isActive)
@@ -115,13 +187,16 @@ public sealed class SteelPanSvgService
         if (noteFragmentCache_.TryGetValue(cacheKey, out var cached))
             return cached;
 
-        var masterSvg = await GetMasterSvgAsync(relativePath);
-        if (string.IsNullOrWhiteSpace(masterSvg))
-            return string.Empty;
+        var masterDoc = await GetMasterDocumentAsync(relativePath);
+        if (masterDoc is null || masterDoc.Root is null)
+            return (string.Empty, string.Empty);
 
-        var fragment = ExtractAndRewriteNoteElementTemplate(masterSvg, noteKey, isActive);
-        noteFragmentCache_[cacheKey] = fragment;
-        return fragment;
+        var noteFragment = ExtractAndRewriteNoteElementTemplate(masterDoc.Root, noteKey, isActive);
+        var labelFragment = ExtractAndRewriteLabelElementTemplate(masterDoc.Root, noteKey, isActive);
+
+        var fragments = (noteFragment, labelFragment);
+        noteFragmentCache_[cacheKey] = fragments;
+        return fragments;
     }
 
     private async Task<string> LoadSvgFileAsync(string relativePath)
@@ -144,255 +219,341 @@ public sealed class SteelPanSvgService
         return svg;
     }
 
-    private static string RewriteRootSvg(string svg, string cssClass)
+    private static void RewriteRootSvg(XDocument doc, string cssClass)
     {
-        return Regex.Replace(
-            svg,
-            @"<svg\b([^>]*)>",
-            match =>
-            {
-                var attrs = match.Groups[1].Value;
+        var root = doc.Root;
+        if (root is null)
+            return;
 
-                attrs = Regex.Replace(
-                    attrs,
-                    @"\sclass\s*=\s*[""'][^""']*[""']",
-                    string.Empty,
-                    RegexOptions.IgnoreCase);
-
-                attrs = Regex.Replace(
-                    attrs,
-                    @"\spreserveAspectRatio\s*=\s*[""'][^""']*[""']",
-                    string.Empty,
-                    RegexOptions.IgnoreCase);
-
-                return $"""<svg{attrs} class="{cssClass}" preserveAspectRatio="xMidYMid meet">""";
-            },
-            RegexOptions.IgnoreCase,
-            TimeSpan.FromSeconds(1));
+        root.SetAttributeValue("class", cssClass);
+        root.SetAttributeValue("preserveAspectRatio", "xMidYMid meet");
     }
 
-    private static string StripNoteShapes(string svg)
+    private static IEnumerable<XElement> FindNoteElements(XElement root)
     {
-        var bodyMatch = Regex.Match(
-            svg,
-            @"^(.*?<svg\b[^>]*>)(.*?)(</svg>\s*)$",
-            RegexOptions.Singleline | RegexOptions.IgnoreCase,
-            TimeSpan.FromSeconds(1));
+        return root
+            .Descendants()
+            .Where(e =>
+            {
+                var id = (string?)e.Attribute("id");
+                return !string.IsNullOrWhiteSpace(id) &&
+                       id.StartsWith("note-", StringComparison.Ordinal);
+            })
+            .Where(e =>
+            {
+                if (IsShapeElement(e))
+                    return true;
 
-        if (!bodyMatch.Success)
-            return svg;
+                return string.Equals(e.Name.LocalName, "g", StringComparison.OrdinalIgnoreCase);
+            });
+    }
 
-        var open = bodyMatch.Groups[1].Value;
-        var body = bodyMatch.Groups[2].Value;
-        var close = bodyMatch.Groups[3].Value;
-
-        body = Regex.Replace(
-            body,
-            @"<(path|rect|ellipse|circle|polygon|polyline)\b[^>]*\bid\s*=\s*[""']note-[^""']+[""'][^>]*/?>",
-            "",
-            RegexOptions.IgnoreCase,
-            TimeSpan.FromSeconds(1));
-
-        return open + body + "<!-- NOTE_SHAPES -->" + close;
+    private static IEnumerable<XElement> FindLabelElements(XElement root)
+    {
+        return root
+            .Descendants()
+            .Where(e =>
+            {
+                var id = (string?)e.Attribute("id");
+                return !string.IsNullOrWhiteSpace(id) &&
+                       id.StartsWith("label-", StringComparison.Ordinal);
+            })
+            .Where(e => IsShapeElement(e) || IsTextElement(e) || string.Equals(e.Name.LocalName, "g", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string ExtractAndRewriteNoteElementTemplate(
-        string svg,
+        XElement root,
         string noteKey,
         bool isActive)
     {
-        var noteId = $"note-{noteKey}";
-        var stateClass = isActive
-            ? "sp-note--active"
-            : "sp-note--inactive";
-
-        var pattern =
-            $@"<(path|rect|ellipse|circle|polygon|polyline)\b([^>]*\bid\s*=\s*[""']{Regex.Escape(noteId)}[""'][^>]*?)(\s*/?)>";
-
-        var match = Regex.Match(
-            svg,
-            pattern,
-            RegexOptions.IgnoreCase,
-            TimeSpan.FromSeconds(1));
-
-        if (!match.Success)
+        var source = FindNoteSource(root, noteKey);
+        if (source is null)
             return string.Empty;
 
-        var tagName = match.Groups[1].Value;
-        var attrs = match.Groups[2].Value;
-        var closing = match.Groups[3].Value;
+        var clone = new XElement(source);
+        RewriteNoteElement(clone, isActive);
 
-        attrs = Regex.Replace(
-            attrs,
-            @"\sclass\s*=\s*[""']([^""']*)[""']",
-            m =>
-            {
-                var classes = m.Groups[1].Value
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Where(c =>
-                        !string.Equals(c, "st0", StringComparison.Ordinal) &&
-                        !string.Equals(c, "sp-note", StringComparison.Ordinal) &&
-                        !string.Equals(c, "sp-note--active", StringComparison.Ordinal) &&
-                        !string.Equals(c, "sp-note--inactive", StringComparison.Ordinal) &&
-                        !string.Equals(c, "sp-note--flash", StringComparison.Ordinal) &&
-                        !string.Equals(c, "sp-note--label", StringComparison.Ordinal) &&
-                        !c.StartsWith("steel-pan__note-shape--", StringComparison.Ordinal) &&
-                        !string.Equals(c, "steel-pan__note-shape", StringComparison.Ordinal))
-                    .ToList();
+        return SerializeElement(clone);
+    }
 
-                classes.Add("sp-note");
-                classes.Add(stateClass);
+    private static string ExtractAndRewriteLabelElementTemplate(
+        XElement root,
+        string noteKey,
+        bool isActive)
+    {
+        var source = FindLabelSource(root, noteKey);
+        if (source is null)
+            return string.Empty;
 
-                return $""" class="{string.Join(" ", classes.Distinct())}" """;
-            },
-            RegexOptions.IgnoreCase);
+        var clone = new XElement(source);
+        RewriteLabelMarkup(clone, isActive);
 
-        if (!Regex.IsMatch(attrs, @"\sclass\s*=", RegexOptions.IgnoreCase))
+        clone.SetAttributeValue("id", "__LABEL_ELEMENT_ID__");
+        clone.SetAttributeValue("data-note", "__NOTE_KEY__");
+
+        return SerializeElement(clone);
+    }
+
+    private static XElement? FindNoteSource(XElement root, string noteKey)
+    {
+        foreach (var candidate in GetEquivalentNoteKeys(noteKey))
         {
-            attrs += $""" class="sp-note {stateClass}" """;
+            var noteId = $"note-{candidate}";
+
+            var source = root
+                .Descendants()
+                .FirstOrDefault(e =>
+                    string.Equals((string?)e.Attribute("id"), noteId, StringComparison.Ordinal) &&
+                    (IsShapeElement(e) || string.Equals(e.Name.LocalName, "g", StringComparison.OrdinalIgnoreCase)));
+
+            if (source is not null)
+                return source;
         }
 
-        attrs = Regex.Replace(attrs, @"\sonclick\s*=\s*[""'][^""']*[""']", "", RegexOptions.IgnoreCase);
-        attrs = Regex.Replace(attrs, @"\sfill\s*=\s*[""'][^""']*[""']", "", RegexOptions.IgnoreCase);
-        attrs = Regex.Replace(attrs, @"\sstroke\s*=\s*[""'][^""']*[""']", "", RegexOptions.IgnoreCase);
-        attrs = Regex.Replace(attrs, @"\sstroke-width\s*=\s*[""'][^""']*[""']", "", RegexOptions.IgnoreCase);
-        attrs = Regex.Replace(attrs, @"\sstroke-linecap\s*=\s*[""'][^""']*[""']", "", RegexOptions.IgnoreCase);
-        attrs = Regex.Replace(attrs, @"\sstroke-linejoin\s*=\s*[""'][^""']*[""']", "", RegexOptions.IgnoreCase);
+        return null;
+    }
 
-        attrs = Regex.Replace(
-            attrs,
-            @"\sstyle\s*=\s*[""']([^""']*)[""']",
-            m =>
-            {
-                var style = m.Groups[1].Value.Trim();
-
-                if (style.Length > 0 && !style.EndsWith(";"))
-                    style += ";";
-
-                if (!style.Contains("cursor:", StringComparison.OrdinalIgnoreCase))
-                    style += "cursor:pointer;";
-
-                return $""" style="{style}" """;
-            },
-            RegexOptions.IgnoreCase);
-
-        if (!Regex.IsMatch(attrs, @"\sstyle\s*=", RegexOptions.IgnoreCase))
+    private static XElement? FindLabelSource(XElement root, string noteKey)
+    {
+        foreach (var candidate in GetEquivalentNoteKeys(noteKey))
         {
-            attrs += """ style="cursor:pointer;" """;
+            var labelId = $"label-{candidate}";
+
+            var source = root
+                .Descendants()
+                .FirstOrDefault(e =>
+                    string.Equals((string?)e.Attribute("id"), labelId, StringComparison.Ordinal) &&
+                    (IsShapeElement(e) || IsTextElement(e) || string.Equals(e.Name.LocalName, "g", StringComparison.OrdinalIgnoreCase)));
+
+            if (source is not null)
+                return source;
         }
 
-        attrs += """ fill="currentColor" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" """;
-        attrs += """ data-note="__NOTE_KEY__" onclick="__NOTE_CLICK__" """;
+        return null;
+    }
 
-        return $"""<{tagName}{attrs}{closing}>""";
+    private static IEnumerable<string> GetEquivalentNoteKeys(string noteKey)
+    {
+        if (string.IsNullOrWhiteSpace(noteKey))
+            yield break;
+
+        yield return noteKey;
+
+        if (!TrySplitNoteKey(noteKey, out var pitch, out var octave))
+            yield break;
+
+        if (!EnharmonicSpellings.TryGetValue(pitch, out var spellings))
+            yield break;
+
+        foreach (var spelling in spellings)
+        {
+            var candidate = spelling + octave;
+
+            if (!string.Equals(candidate, noteKey, StringComparison.Ordinal))
+                yield return candidate;
+        }
+    }
+
+    private static bool TrySplitNoteKey(
+        string noteKey,
+        out string pitch,
+        out string octave)
+    {
+        pitch = string.Empty;
+        octave = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(noteKey))
+            return false;
+
+        var splitIndex = -1;
+        for (var i = 0; i < noteKey.Length; i++)
+        {
+            if (char.IsDigit(noteKey[i]) || noteKey[i] == '-')
+            {
+                splitIndex = i;
+                break;
+            }
+        }
+
+        if (splitIndex <= 0 || splitIndex >= noteKey.Length)
+            return false;
+
+        pitch = noteKey[..splitIndex];
+        octave = noteKey[splitIndex..];
+        return true;
+    }
+
+    private static void RewriteNoteElement(XElement element, bool isActive)
+    {
+        var stateClass = isActive ? "sp-note--on" : "sp-note--off";
+
+        AddClass(element, "sp-note");
+        AddClass(element, stateClass);
+
+        element.SetAttributeValue("data-note", "__NOTE_KEY__");
+        element.SetAttributeValue("onclick", "__NOTE_CLICK__");
+        EnsureStyleContains(element, "cursor:pointer;");
+
+        if (IsShapeElement(element))
+        {
+            RewriteClickableShape(element);
+            return;
+        }
+
+        foreach (var shape in element.Descendants().Where(IsShapeElement))
+        {
+            RewriteShapeForGroup(shape);
+        }
+    }
+
+    private static void RewriteClickableShape(XElement shape)
+    {
+        RemovePresentationAttributes(shape);
+        RemoveLegacyClasses(shape);
+
+        shape.SetAttributeValue("stroke", "#000");
+        shape.SetAttributeValue("stroke-width", "6");
+        shape.SetAttributeValue("stroke-linecap", "round");
+        shape.SetAttributeValue("stroke-linejoin", "round");
+    }
+
+    private static void RewriteShapeForGroup(XElement shape)
+    {
+        RemovePresentationAttributes(shape);
+        RemoveLegacyClasses(shape);
+
+        shape.SetAttributeValue("stroke", "#000");
+        shape.SetAttributeValue("stroke-width", "6");
+        shape.SetAttributeValue("stroke-linecap", "round");
+        shape.SetAttributeValue("stroke-linejoin", "round");
+    }
+
+    private static void RemovePresentationAttributes(XElement element)
+    {
+        element.Attribute("fill")?.Remove();
+        element.Attribute("stroke")?.Remove();
+        element.Attribute("stroke-width")?.Remove();
+        element.Attribute("stroke-linecap")?.Remove();
+        element.Attribute("stroke-linejoin")?.Remove();
+        element.Attribute("stroke-miterlimit")?.Remove();
+    }
+
+    private static void RewriteLabelMarkup(XElement element, bool isActive)
+    {
+        AddClass(element, "sp-label");
+
+        foreach (var node in element.DescendantsAndSelf()
+                     .Where(e => IsShapeElement(e) || IsTextElement(e)))
+        {
+            node.Attribute("fill")?.Remove();
+            node.Attribute("style")?.Remove();
+        }
+
+        AddClass(element, isActive ? "sp-label--on" : "sp-label--off");
+    }
+
+    private static bool IsShapeElement(XElement element)
+    {
+        return ShapeTags.Contains(element.Name.LocalName);
+    }
+
+    private static bool IsTextElement(XElement element)
+    {
+        return string.Equals(element.Name.LocalName, "text", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(element.Name.LocalName, "tspan", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddClass(XElement element, string className)
+    {
+        var existing = ((string?)element.Attribute("class")) ?? string.Empty;
+
+        var classes = existing
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(c => !string.Equals(c, className, StringComparison.Ordinal))
+            .ToList();
+
+        classes.Add(className);
+
+        element.SetAttributeValue("class", string.Join(" ", classes.Distinct(StringComparer.Ordinal)));
+    }
+
+    private static void RemoveLegacyClasses(XElement element)
+    {
+        var existing = ((string?)element.Attribute("class")) ?? string.Empty;
+
+        var classes = existing
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(c =>
+                !string.Equals(c, "st0", StringComparison.Ordinal) &&
+                !string.Equals(c, "steel-pan__note-shape", StringComparison.Ordinal) &&
+                !c.StartsWith("steel-pan__note-shape--", StringComparison.Ordinal))
+            .ToList();
+
+        if (classes.Count == 0)
+        {
+            element.Attribute("class")?.Remove();
+            return;
+        }
+
+        element.SetAttributeValue("class", string.Join(" ", classes.Distinct(StringComparer.Ordinal)));
+    }
+
+    private static void EnsureStyleContains(XElement element, string declaration)
+    {
+        var style = ((string?)element.Attribute("style"))?.Trim() ?? string.Empty;
+
+        if (!style.Contains("cursor:", StringComparison.OrdinalIgnoreCase))
+        {
+            if (style.Length > 0 && !style.EndsWith(';'))
+                style += ";";
+
+            style += declaration;
+        }
+
+        element.SetAttributeValue("style", style);
     }
 
     private static string BindNoteFragmentToComponent(
         string template,
         string componentId,
-        string noteKey)
+        string noteKey,
+        string labelElementId)
     {
         var noteClick =
-            $"steelPan.noteClick(this,'{EscapeJs(componentId)}','{EscapeJs(noteKey)}',event)";
+            $"steelPan.noteClick(this,document.getElementById('{EscapeJs(labelElementId)}'),'{EscapeJs(componentId)}','{EscapeJs(noteKey)}',event)";
 
         return template
             .Replace("__NOTE_KEY__", EscapeAttribute(noteKey), StringComparison.Ordinal)
             .Replace("__NOTE_CLICK__", EscapeAttribute(noteClick), StringComparison.Ordinal);
     }
 
-    private static string MoveLabelsToEnd(string svg, HashSet<string> activeNotes)
+    private static string BindLabelFragmentToComponent(
+        string template,
+        string noteKey,
+        string labelElementId)
     {
-        var bodyMatch = Regex.Match(
-            svg,
-            @"^(.*?<svg\b[^>]*>)(.*?)(</svg>\s*)$",
-            RegexOptions.Singleline | RegexOptions.IgnoreCase,
-            TimeSpan.FromSeconds(1));
-
-        if (!bodyMatch.Success)
-            return svg;
-
-        var open = bodyMatch.Groups[1].Value;
-        var body = bodyMatch.Groups[2].Value;
-        var close = bodyMatch.Groups[3].Value;
-
-        var extracted = new List<string>();
-
-        body = Regex.Replace(
-            body,
-            @"<g\b[^>]*\bid\s*=\s*[""']label-([^""']+)[""'][^>]*>.*?</g>",
-            m =>
-            {
-                var noteKey = m.Groups[1].Value;
-                var content = RewriteLabelMarkup(m.Value, activeNotes.Contains(noteKey));
-                extracted.Add(content);
-                return string.Empty;
-            },
-            RegexOptions.Singleline | RegexOptions.IgnoreCase,
-            TimeSpan.FromSeconds(1));
-
-        body = Regex.Replace(
-            body,
-            @"<(path|rect|ellipse|circle|polygon|polyline|text|tspan)\b[^>]*\bid\s*=\s*[""']label-([^""']+)[""'][^>]*/?>",
-            m =>
-            {
-                var noteKey = m.Groups[2].Value;
-                var content = RewriteLabelMarkup(m.Value, activeNotes.Contains(noteKey));
-                extracted.Add(content);
-                return string.Empty;
-            },
-            RegexOptions.IgnoreCase,
-            TimeSpan.FromSeconds(1));
-
-        if (extracted.Count == 0)
-            return svg;
-
-        return open + body + string.Join("", extracted) + close;
+        return template
+            .Replace("__NOTE_KEY__", EscapeAttribute(noteKey), StringComparison.Ordinal)
+            .Replace("__LABEL_ELEMENT_ID__", EscapeAttribute(labelElementId), StringComparison.Ordinal);
     }
 
-    private static string RewriteLabelMarkup(string svg, bool isActive)
+    private static string BuildLabelElementId(string componentId, string noteKey)
     {
-        svg = Regex.Replace(
-            svg,
-            @"\sclass\s*=\s*[""']([^""']*)[""']",
-            m =>
-            {
-                var classes = m.Groups[1].Value
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Where(c =>
-                        !string.Equals(c, "sp-note--label", StringComparison.Ordinal))
-                    .ToList();
+        return $"sp-label-{SanitizeIdPart(componentId)}-{SanitizeIdPart(noteKey)}";
+    }
 
-                classes.Add("sp-note--label");
+    private static string SanitizeIdPart(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "x";
 
-                return $""" class="{string.Join(" ", classes.Distinct())}" """;
-            },
-            RegexOptions.IgnoreCase);
-
-        if (!Regex.IsMatch(svg, @"\sclass\s*=", RegexOptions.IgnoreCase))
+        var sb = new StringBuilder(value.Length);
+        foreach (var ch in value)
         {
-            svg = Regex.Replace(
-                svg,
-                @"^<([a-zA-Z][\w:-]*)\b",
-                m => $"""<{m.Groups[1].Value} class="sp-note--label""",
-                RegexOptions.IgnoreCase);
+            sb.Append(char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_');
         }
 
-        svg = Regex.Replace(
-            svg,
-            @"\sfill\s*=\s*[""'][^""']*[""']",
-            "",
-            RegexOptions.IgnoreCase);
-
-        if (isActive)
-        {
-            svg = Regex.Replace(
-                svg,
-                @"<(path|text|tspan|circle|ellipse|polygon|polyline|rect)\b",
-                m => $"{m.Value} fill=\"#ffffff\"",
-                RegexOptions.IgnoreCase);
-        }
-
-        return svg;
+        return sb.ToString();
     }
 
     private static string EscapeJs(string value)
@@ -407,5 +568,17 @@ public sealed class SteelPanSvgService
         return value
             .Replace("&", "&amp;")
             .Replace("\"", "&quot;");
+    }
+
+    private static string SerializeDocument(XDocument doc)
+    {
+        return doc.Declaration is null
+            ? doc.ToString(SaveOptions.DisableFormatting)
+            : doc.Declaration + doc.ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string SerializeElement(XElement element)
+    {
+        return element.ToString(SaveOptions.DisableFormatting);
     }
 }

@@ -132,26 +132,39 @@ h4 {
     text-align: start;
 }
 
+.sp-label {
+    pointer-events: none;
+    transition: fill 80ms ease, transform 80ms ease;
+}
+
+.sp-label--off {
+    fill: #000000;
+}
+
+.sp-label--on {
+    fill: #ffffff;
+}
+
+.sp-label--flash {
+    fill: #ffffff !important;
+}
+
 .sp-note {
     cursor: pointer;
     transition: fill 80ms ease, transform 80ms ease;
 }
 
-.sp-note--label {
-    pointer-events: none;
-}
-
-.sp-note--active {
-    fill: #e2201c;
-}
-
-.sp-note--inactive {
+.sp-note--off {
     fill: #ffffff;
 }
 
-    .sp-note--inactive:hover {
+    .sp-note--off:hover {
         fill: #e5e5e5;
     }
+
+.sp-note--on {
+    fill: #e2201c;
+}
 
 .sp-note--flash {
     fill: #e2201c !important;

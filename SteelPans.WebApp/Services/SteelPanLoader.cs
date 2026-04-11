@@ -27,7 +27,14 @@ public sealed class SteelPanLoader
 
     public async Task<List<SteelPan>> LoadAsync(string path = "data/pans.json")
     {
-        var fullPath = Path.Combine(_env.WebRootPath, path);
+        Console.WriteLine($"ContentRootPath: {_env.ContentRootPath}");
+        Console.WriteLine($"WebRootPath: {_env.WebRootPath ?? "<null>"}");
+
+        if (string.IsNullOrWhiteSpace(_env.WebRootPath))
+            throw new InvalidOperationException("WebRootPath is null. Ensure wwwroot exists in the published app.");
+
+        var fullPath = Path.Combine(_env.WebRootPath!, path);
+        Console.WriteLine($"Full path: {fullPath}");
 
         if (!File.Exists(fullPath))
             throw new FileNotFoundException(fullPath);

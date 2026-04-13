@@ -33,22 +33,13 @@
             }
         </select>
     </div>
-
-    <div class="steel-pan__chord-actions">
-        <button class="btn btn-outline-secondary"
-                type="button"
-                disabled="@Disabled"
-                @onclick="ClearChordAsync">
-            Clear
-        </button>
-
-        <button class="btn btn-primary steel-pan__chord-play"
-                type="button"
-                disabled="@Disabled"
-                @onclick="PlayClickedAsync">
-            Play
-        </button>
-    </div>
+    
+    <button class="btn btn-primary steel-pan__chord-play"
+            type="button"
+            disabled="@Disabled"
+            @onclick="PlayClickedAsync">
+        Play
+    </button>
 </div>
 
 @code {

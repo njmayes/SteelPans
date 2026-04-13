@@ -395,6 +395,20 @@ public partial class Pans
         return actions;
     }
 
+    private void OnChordBuilderOpenChanged()
+    {
+        showChordBuilderPanel_ = !showChordBuilderPanel_;
+        if (showChordBuilderPanel_)
+            showMetronomePanel_ = false;
+    }
+
+    private void OnMetronomeOpenChanged()
+    {
+        showMetronomePanel_ = !showMetronomePanel_;
+        if (showMetronomePanel_)
+            showChordBuilderPanel_ = false;
+    }
+
     private Task OnMetronomeBpmChangedAsync(int bpm)
     {
         metronomeBpm_ = bpm;

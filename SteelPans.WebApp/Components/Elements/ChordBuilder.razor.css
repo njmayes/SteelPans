@@ -1,7 +1,6 @@
 ﻿.steel-pan__chord-builder {
     display: grid;
-    grid-template-columns: 1fr;
-    align-items: end;
+    grid-template-columns: auto auto;
     gap: 0.8rem;
 }
 
@@ -28,13 +27,6 @@
     align-items: center;
 }
 
-.steel-pan__chord-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3.5rem;
-    align-items: center;
-}
-
 .steel-pan__chord-set {
     display: contents;
 }
@@ -44,4 +36,35 @@
     height: calc(1.5em + 0.75rem + 2px);
     white-space: nowrap;
     font-weight: 700;
+}
+
+@media (max-width: 420px) {
+    .steel-pan__chord-builder {
+        grid-template-columns: 1fr;
+    }
+
+    .steel-pan__chord-selector {
+        grid-template-columns: 1fr;
+        row-gap: 0.6rem;
+    }
+
+    .steel-pan__chord-set {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+    }
+
+    .steel-pan__chord-select--note {
+        width: 100%;
+    }
+
+        .steel-pan__chord-select--note > * {
+            flex: 1 1 auto;
+        }
+
+    .steel-pan__chord-actions {
+        flex: 0 0 auto;
+        min-width: 0;
+        width: 100%;
+    }
 }

@@ -42,7 +42,7 @@
     public bool IsOpen { get; set; }
 
     [Parameter]
-    public EventCallback<bool> IsOpenChanged { get; set; }
+    public EventCallback IsOpenChanged { get; set; }
 
     [Parameter]
     public string? PanelVariantClass { get; set; }
@@ -92,6 +92,6 @@
 
     private async Task ToggleAsync()
     {
-        await IsOpenChanged.InvokeAsync(!IsOpen);
+        await IsOpenChanged.InvokeAsync();
     }
 }

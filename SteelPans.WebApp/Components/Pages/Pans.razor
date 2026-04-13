@@ -68,7 +68,7 @@
                               Label="Chords"
                               IconClass="bi bi-music-note-list"
                               IsOpen="@showChordBuilderPanel_"
-                              IsOpenChanged="@(value => showChordBuilderPanel_ = value)">
+                              IsOpenChanged="@OnChordBuilderOpenChanged">
                     <ChordBuilder OnChordSelected="SelectChordAsync"
                                   OnPlay="PlaySelectedNotesAsync"
                                   Disabled="@isMidiPlaying_" />
@@ -78,7 +78,7 @@
                               Label="Metronome"
                               IconClass="bi bi-music-note-beamed"
                               IsOpen="@showMetronomePanel_"
-                              IsOpenChanged="@(value => showMetronomePanel_ = value)"
+                              IsOpenChanged="@OnMetronomeOpenChanged"
                               PanelVariantClass="overlay-panel-body-wrap--metronome"
                               BodyVariantClass="overlay-panel-body--metronome">
                     <HeaderContent>

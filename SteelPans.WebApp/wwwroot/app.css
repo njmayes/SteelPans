@@ -175,16 +175,12 @@ h4 {
 }
 
 .sp-label--on {
-    fill: #ffffff;
-}
-
-.sp-label--flash {
     fill: #ffffff !important;
 }
 
 .sp-note {
     cursor: pointer;
-    transition: fill 80ms ease, transform 80ms ease;
+    transition: fill 50ms ease, transform 50ms ease;
     touch-action: none;
 }
 
@@ -193,10 +189,6 @@ h4 {
 }
 
 .sp-note--on {
-    fill: #e2201c;
-}
-
-.sp-note--flash {
     fill: #e2201c !important;
 }
 

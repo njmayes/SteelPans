@@ -4,6 +4,8 @@
     _audioContext: null,
     _scheduledSources: [],
     _scheduledSourcesByNote: {},
+    _scheduledVisualTimers: [],
+    _panElements: {},
     _metronomeNodes: [],
 
     register: function (id, dotNetRef) {
@@ -12,6 +14,40 @@
 
     unregister: function (id) {
         delete this._refs[id];
+        delete this._panElements[id];
+        this.clearPlayingVisuals(id);
+    },
+
+    bindPanElements: function (componentId) {
+        if (!componentId)
+            return;
+
+        const root = document.querySelector(`[data-steelpan-id="${componentId}"]`) ||
+            document.getElementById(componentId) ||
+            document.querySelector(`.steel-pan [data-component-id="${componentId}"]`);
+
+        const noteElements = {};
+        const labelElements = {};
+
+        const allNoteEls = document.querySelectorAll(`[data-pan-note][data-pan-component="${componentId}"]`);
+        const allLabelEls = document.querySelectorAll(`[data-pan-label][data-pan-component="${componentId}"]`);
+
+        for (const el of allNoteEls) {
+            const key = el.getAttribute("data-pan-note");
+            if (key)
+                noteElements[key] = el;
+        }
+
+        for (const el of allLabelEls) {
+            const key = el.getAttribute("data-pan-label");
+            if (key)
+                labelElements[key] = el;
+        }
+
+        this._panElements[componentId] = {
+            noteElements: noteElements,
+            labelElements: labelElements
+        };
     },
 
     _getAudioContext: function () {
@@ -95,6 +131,44 @@
         }
     },
 
+    _getBoundPan: function (componentId) {
+        return this._panElements[componentId] || null;
+    },
+
+    _setNotePlaying: function (componentId, noteKey, isPlaying) {
+        const pan = this._getBoundPan(componentId);
+        if (!pan)
+            return;
+
+        const noteEl = pan.noteElements[noteKey];
+        const labelEl = pan.labelElements[noteKey];
+
+        if (noteEl) {
+            noteEl.classList.toggle("sp-note--on", !!isPlaying);
+        }
+
+        if (labelEl) {
+            labelEl.classList.toggle("sp-label--on", !!isPlaying);
+        }
+    },
+
+    clearPlayingVisuals: function (componentId, noteKeys) {
+        const pan = this._getBoundPan(componentId);
+        if (!pan)
+            return;
+
+        if (Array.isArray(noteKeys) && noteKeys.length > 0) {
+            for (const noteKey of noteKeys) {
+                this._setNotePlaying(componentId, noteKey, false);
+            }
+            return;
+        }
+
+        for (const noteKey of Object.keys(pan.noteElements)) {
+            this._setNotePlaying(componentId, noteKey, false);
+        }
+    },
+
     notePointerDown: async function (noteElement, labelElement, componentId, noteKey, event) {
         if (event.pointerType === "mouse" && event.button !== 0)
             return;
@@ -115,24 +189,16 @@
 
         await this.playNote(noteKey);
 
-        if (!noteElement.classList.contains("sp-note--on")) {
-            noteElement.classList.add("sp-note--flash");
+        this._setNotePlaying(componentId, noteKey, true);
 
-            setTimeout(() => {
-                noteElement.classList.remove("sp-note--flash");
-            }, 120);
-        }
+        const timeoutId = window.setTimeout(() => {
+            this._setNotePlaying(componentId, noteKey, false);
+        }, 120);
 
-        if (!labelElement.classList.contains("sp-label--on")) {
-            labelElement.classList.add("sp-label--flash");
-
-            setTimeout(() => {
-                labelElement.classList.remove("sp-label--flash");
-            }, 120);
-        }
+        this._scheduledVisualTimers.push(timeoutId);
     },
 
-    playMidiSchedule: async function (scheduledActions) {
+    playMidiSchedule: async function (componentId, scheduledActions) {
         if (!Array.isArray(scheduledActions) || scheduledActions.length === 0)
             return null;
 
@@ -140,7 +206,7 @@
 
         const ctx = this._getAudioContext();
 
-        this.stopMidiSchedule();
+        this.stopMidiSchedule(componentId);
 
         const uniqueNoteKeys = [...new Set(
             scheduledActions
@@ -155,15 +221,18 @@
         const startAt = ctx.currentTime + 0.05;
         this._scheduledSourcesByNote = {};
 
-        const noteOnActions = scheduledActions
+        const sortedActions = scheduledActions
             .filter(action =>
                 action &&
-                action.isNoteOn === true &&
                 typeof action.noteKey === "string" &&
-                typeof action.timeSeconds === "number")
+                typeof action.timeSeconds === "number" &&
+                typeof action.isNoteOn === "boolean")
             .sort((a, b) => a.timeSeconds - b.timeSeconds);
 
-        for (const action of noteOnActions) {
+        for (const action of sortedActions) {
+            if (!action.isNoteOn)
+                continue;
+
             const when = startAt + action.timeSeconds;
             const buffer = await this._loadBuffer(action.noteKey);
 
@@ -206,13 +275,7 @@
             };
         }
 
-        const noteOffActions = scheduledActions
-            .filter(action =>
-                action &&
-                action.isNoteOn === false &&
-                typeof action.noteKey === "string" &&
-                typeof action.timeSeconds === "number")
-            .sort((a, b) => a.timeSeconds - b.timeSeconds);
+        const noteOffActions = sortedActions.filter(action => !action.isNoteOn);
 
         for (const action of noteOffActions) {
             const perNote = this._scheduledSourcesByNote[action.noteKey];
@@ -240,6 +303,16 @@
             }
         }
 
+        for (const action of sortedActions) {
+            const delayMs = Math.max(0, (startAt + action.timeSeconds - ctx.currentTime) * 1000.0);
+
+            const timeoutId = window.setTimeout(() => {
+                this._setNotePlaying(componentId, action.noteKey, action.isNoteOn);
+            }, delayMs);
+
+            this._scheduledVisualTimers.push(timeoutId);
+        }
+
         return startAt;
     },
 
@@ -250,7 +323,6 @@
         await this.ensureAudioReady();
 
         const ctx = this._getAudioContext();
-
         const actualStartAt = startAt ?? (ctx.currentTime + 0.05);
 
         for (const action of actions) {
@@ -292,7 +364,6 @@
         await this.ensureAudioReady();
 
         const ctx = this._getAudioContext();
-
         const now = when ?? ctx.currentTime;
 
         const oscillator = ctx.createOscillator();
@@ -321,7 +392,7 @@
         };
     },
 
-    stopMidiSchedule: function () {
+    stopMidiSchedule: function (componentId) {
         for (const entry of this._scheduledSources) {
             try {
                 entry.source.stop();
@@ -329,8 +400,17 @@
             }
         }
 
+        for (const timerId of this._scheduledVisualTimers) {
+            window.clearTimeout(timerId);
+        }
+
         this._scheduledSources = [];
         this._scheduledSourcesByNote = {};
+        this._scheduledVisualTimers = [];
+
+        if (componentId) {
+            this.clearPlayingVisuals(componentId);
+        }
     },
 
     stopMetronome: function () {

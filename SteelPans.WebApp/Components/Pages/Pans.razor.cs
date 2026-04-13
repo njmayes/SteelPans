@@ -259,8 +259,6 @@ public partial class Pans
 
             StartPlaybackProgressLoop(playbackSessionStartOffset_, playbackProgressCts_.Token);
 
-            await steelPanView_.MidiPlaybackCompletion;
-
             if (!midiPlaybackCts_.IsCancellationRequested)
             {
                 playbackPosition_ = playbackDuration_;

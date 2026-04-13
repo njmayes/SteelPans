@@ -110,12 +110,15 @@ public sealed class SteelPanSvgService
                 labelMarkup.Append(
                     BindLabelFragmentToComponent(
                         labelTemplate,
+                        componentId,
                         note.ToString(),
                         labelElementId));
             }
         }
 
-        var rebuilt = skeleton.Replace("<!-- NOTE_SHAPES -->", noteMarkup.ToString(), StringComparison.Ordinal);
+        var rebuilt = skeleton
+            .Replace("__COMPONENT_ID__", EscapeAttribute(componentId), StringComparison.Ordinal)
+            .Replace("<!-- NOTE_SHAPES -->", noteMarkup.ToString(), StringComparison.Ordinal);
 
         if (labelMarkup.Length > 0)
             rebuilt = rebuilt.Replace("</svg>", labelMarkup + "</svg>", StringComparison.Ordinal);
@@ -157,6 +160,8 @@ public sealed class SteelPanSvgService
         var root = skeletonDoc.Root;
         if (root is null)
             return string.Empty;
+
+        root.SetAttributeValue("data-steelpan-id", "__COMPONENT_ID__");
 
         var noteElements = FindNoteElements(root).ToList();
         foreach (var noteElement in noteElements)
@@ -296,7 +301,8 @@ public sealed class SteelPanSvgService
         RewriteLabelMarkup(clone, isActive);
 
         clone.SetAttributeValue("id", "__LABEL_ELEMENT_ID__");
-        clone.SetAttributeValue("data-note", "__NOTE_KEY__");
+        clone.SetAttributeValue("data-pan-component", "__COMPONENT_ID__");
+        clone.SetAttributeValue("data-pan-label", "__NOTE_KEY__");
 
         return SerializeElement(clone);
     }
@@ -397,7 +403,8 @@ public sealed class SteelPanSvgService
         AddClass(element, "sp-note");
         AddClass(element, stateClass);
 
-        element.SetAttributeValue("data-note", "__NOTE_KEY__");
+        element.SetAttributeValue("data-pan-component", "__COMPONENT_ID__");
+        element.SetAttributeValue("data-pan-note", "__NOTE_KEY__");
         element.SetAttributeValue("onpointerdown", "__NOTE_CLICK__");
         EnsureStyleContains(element, "cursor:pointer;");
 
@@ -443,11 +450,13 @@ public sealed class SteelPanSvgService
         element.Attribute("stroke-linecap")?.Remove();
         element.Attribute("stroke-linejoin")?.Remove();
         element.Attribute("stroke-miterlimit")?.Remove();
+        element.Attribute("style")?.Remove();
     }
 
     private static void RewriteLabelMarkup(XElement element, bool isActive)
     {
         AddClass(element, "sp-label");
+        AddClass(element, isActive ? "sp-label--on" : "sp-label--off");
 
         foreach (var node in element.DescendantsAndSelf()
                      .Where(e => IsShapeElement(e) || IsTextElement(e)))
@@ -455,8 +464,6 @@ public sealed class SteelPanSvgService
             node.Attribute("fill")?.Remove();
             node.Attribute("style")?.Remove();
         }
-
-        AddClass(element, isActive ? "sp-label--on" : "sp-label--off");
     }
 
     private static bool IsShapeElement(XElement element)
@@ -483,6 +490,7 @@ public sealed class SteelPanSvgService
 
         element.SetAttributeValue("class", string.Join(" ", classes.Distinct(StringComparer.Ordinal)));
     }
+
     private static void RemoveClass(XElement element, string className)
     {
         var existing = ((string?)element.Attribute("class")) ?? string.Empty;
@@ -500,6 +508,7 @@ public sealed class SteelPanSvgService
 
         element.SetAttributeValue("class", string.Join(" ", classes.Distinct(StringComparer.Ordinal)));
     }
+
     private static void RemoveLegacyClasses(XElement element)
     {
         var existing = ((string?)element.Attribute("class")) ?? string.Empty;
@@ -543,16 +552,19 @@ public sealed class SteelPanSvgService
             $"steelPan.notePointerDown(this,document.getElementById('{EscapeJs(labelElementId)}'),'{EscapeJs(componentId)}','{EscapeJs(noteKey)}',event)";
 
         return template
+            .Replace("__COMPONENT_ID__", EscapeAttribute(componentId), StringComparison.Ordinal)
             .Replace("__NOTE_KEY__", EscapeAttribute(noteKey), StringComparison.Ordinal)
             .Replace("__NOTE_CLICK__", EscapeAttribute(noteClick), StringComparison.Ordinal);
     }
 
     private static string BindLabelFragmentToComponent(
         string template,
+        string componentId,
         string noteKey,
         string labelElementId)
     {
         return template
+            .Replace("__COMPONENT_ID__", EscapeAttribute(componentId), StringComparison.Ordinal)
             .Replace("__NOTE_KEY__", EscapeAttribute(noteKey), StringComparison.Ordinal)
             .Replace("__LABEL_ELEMENT_ID__", EscapeAttribute(labelElementId), StringComparison.Ordinal);
     }

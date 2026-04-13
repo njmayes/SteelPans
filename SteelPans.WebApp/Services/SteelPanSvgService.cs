@@ -40,7 +40,7 @@ public sealed class SteelPanSvgService
     private readonly Dictionary<string, XDocument> masterDocCache_ = new();
     private readonly Dictionary<string, string> skeletonCache_ = new();
 
-    // key = "{relativePath}|{noteKey}|on/off"
+    // key = "{relativePath}|{noteKey}"
     // value = (noteFragmentTemplate, labelFragmentTemplate)
     private readonly Dictionary<string, (string, string)> noteFragmentCache_ = new();
 
@@ -67,8 +67,7 @@ public sealed class SteelPanSvgService
 
         foreach (var noteKey in noteKeys)
         {
-            await GetNoteFragmentTemplateAsync(relativePath, noteKey, isActive: false);
-            await GetNoteFragmentTemplateAsync(relativePath, noteKey, isActive: true);
+            await GetNoteFragmentTemplateAsync(relativePath, noteKey);
         }
     }
 
@@ -88,21 +87,22 @@ public sealed class SteelPanSvgService
 
         foreach (var note in notes)
         {
+            var noteKey = note.ToString();
+
             var (noteTemplate, labelTemplate) = await GetNoteFragmentTemplateAsync(
                 relativePath,
-                note.ToString(),
-                note.Active);
+                noteKey);
 
             if (string.IsNullOrWhiteSpace(noteTemplate))
                 continue;
 
-            var labelElementId = BuildLabelElementId(componentId, note.ToString());
+            var labelElementId = BuildLabelElementId(componentId, noteKey);
 
             noteMarkup.Append(
                 BindNoteFragmentToComponent(
                     noteTemplate,
                     componentId,
-                    note.ToString(),
+                    noteKey,
                     labelElementId));
 
             if (!string.IsNullOrWhiteSpace(labelTemplate))
@@ -111,7 +111,7 @@ public sealed class SteelPanSvgService
                     BindLabelFragmentToComponent(
                         labelTemplate,
                         componentId,
-                        note.ToString(),
+                        noteKey,
                         labelElementId));
             }
         }
@@ -184,10 +184,9 @@ public sealed class SteelPanSvgService
 
     private async Task<(string NoteFragment, string LabelFragment)> GetNoteFragmentTemplateAsync(
         string relativePath,
-        string noteKey,
-        bool isActive)
+        string noteKey)
     {
-        var cacheKey = $"{relativePath}|{noteKey}|{(isActive ? "on" : "off")}";
+        var cacheKey = $"{relativePath}|{noteKey}";
 
         if (noteFragmentCache_.TryGetValue(cacheKey, out var cached))
             return cached;
@@ -196,8 +195,8 @@ public sealed class SteelPanSvgService
         if (masterDoc is null || masterDoc.Root is null)
             return (string.Empty, string.Empty);
 
-        var noteFragment = ExtractAndRewriteNoteElementTemplate(masterDoc.Root, noteKey, isActive);
-        var labelFragment = ExtractAndRewriteLabelElementTemplate(masterDoc.Root, noteKey, isActive);
+        var noteFragment = ExtractAndRewriteNoteElementTemplate(masterDoc.Root, noteKey);
+        var labelFragment = ExtractAndRewriteLabelElementTemplate(masterDoc.Root, noteKey);
 
         var fragments = (noteFragment, labelFragment);
         noteFragmentCache_[cacheKey] = fragments;
@@ -275,30 +274,28 @@ public sealed class SteelPanSvgService
 
     private static string ExtractAndRewriteNoteElementTemplate(
         XElement root,
-        string noteKey,
-        bool isActive)
+        string noteKey)
     {
         var source = FindNoteSource(root, noteKey);
         if (source is null)
             return string.Empty;
 
         var clone = new XElement(source);
-        RewriteNoteElement(clone, isActive);
+        RewriteNoteElement(clone);
 
         return SerializeElement(clone);
     }
 
     private static string ExtractAndRewriteLabelElementTemplate(
         XElement root,
-        string noteKey,
-        bool isActive)
+        string noteKey)
     {
         var source = FindLabelSource(root, noteKey);
         if (source is null)
             return string.Empty;
 
         var clone = new XElement(source);
-        RewriteLabelMarkup(clone, isActive);
+        RewriteLabelMarkup(clone);
 
         clone.SetAttributeValue("id", "__LABEL_ELEMENT_ID__");
         clone.SetAttributeValue("data-pan-component", "__COMPONENT_ID__");
@@ -396,12 +393,9 @@ public sealed class SteelPanSvgService
         return true;
     }
 
-    private static void RewriteNoteElement(XElement element, bool isActive)
+    private static void RewriteNoteElement(XElement element)
     {
-        var stateClass = isActive ? "sp-note--on" : "sp-note--off";
-
         AddClass(element, "sp-note");
-        AddClass(element, stateClass);
 
         element.SetAttributeValue("data-pan-component", "__COMPONENT_ID__");
         element.SetAttributeValue("data-pan-note", "__NOTE_KEY__");
@@ -453,10 +447,9 @@ public sealed class SteelPanSvgService
         element.Attribute("style")?.Remove();
     }
 
-    private static void RewriteLabelMarkup(XElement element, bool isActive)
+    private static void RewriteLabelMarkup(XElement element)
     {
         AddClass(element, "sp-label");
-        AddClass(element, isActive ? "sp-label--on" : "sp-label--off");
 
         foreach (var node in element.DescendantsAndSelf()
                      .Where(e => IsShapeElement(e) || IsTextElement(e)))

@@ -1,0 +1,24 @@
+name: Redeploy Pans
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+
+jobs:
+  redeploy:
+    runs-on: [self-hosted, home-server]
+
+    steps:
+      - name: Deploy Prod (master)
+        if: github.ref == 'refs/heads/master'
+        run: |
+          cd ~/server/prod/apps/steel-pans
+          docker compose restart steel-pans
+
+      - name: Deploy Dev (develop)
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          cd ~/server/dev/apps/steel-pans
+          docker compose restart steel-pans

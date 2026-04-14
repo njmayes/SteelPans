@@ -10,6 +10,7 @@ public enum PanType
     Lead,
     DoubleGuitar,
     DoubleSecond,
+    TripleCello,
 }
 
 public class PanNote

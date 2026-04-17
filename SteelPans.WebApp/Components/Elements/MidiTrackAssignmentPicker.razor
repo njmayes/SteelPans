@@ -1,0 +1,110 @@
+@using SteelPans.WebApp.Model
+@using SteelPans.WebApp.Extensions
+
+<div class="sp-section midi-track-picker @(Disabled ? "midi-track-picker--disabled" : null)">
+    <div class="midi-track-picker__header">
+        <div>
+            <label class="form-label">Track assignments</label>
+            <div class="midi-track-picker__subtext">Choose which MIDI tracks to show and which pan each track should use.</div>
+        </div>
+
+        <button class="btn btn-primary"
+                disabled="@(!CanConfirm)"
+                @onclick="ConfirmAsync">
+            Load assigned pans
+        </button>
+    </div>
+
+    @if (Assignments.Count == 0)
+    {
+        <div class="midi-track-picker__empty">Load a MIDI file to assign its playable tracks.</div>
+    }
+    else
+    {
+        <div class="midi-track-picker__rows">
+            @foreach (var assignment in Assignments)
+            {
+                <div class="midi-track-picker__row">
+                    <label class="midi-track-picker__toggle">
+                        <input type="checkbox"
+                               checked="@assignment.IsSelected"
+                               disabled="@Disabled"
+                               @onchange="e => OnSelectedChanged(assignment, e)" />
+                        <span>Use</span>
+                    </label>
+
+                    <div class="midi-track-picker__track-meta">
+                        <div class="midi-track-picker__track-label">@assignment.TrackLabel</div>
+                        <div class="midi-track-picker__track-count">@assignment.NoteCount notes</div>
+                    </div>
+
+                    <select class="form-select midi-track-picker__select"
+                            disabled="@(Disabled || !assignment.IsSelected)"
+                            value="@(assignment.AssignedPanType?.ToString() ?? string.Empty)"
+                            @onchange="e => OnPanChanged(assignment, e)">
+                        <option value="">Choose pan</option>
+                        @foreach (var panType in AvailablePanTypes)
+                        {
+                            <option value="@panType.ToString()">@panType.ToSpacedPascal()</option>
+                        }
+                    </select>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required List<MidiTrackAssignment> Assignments { get; set; }
+
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<PanType> AvailablePanTypes { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+    private bool CanConfirm =>
+        !Disabled &&
+        Assignments.Any(x => x.IsSelected) &&
+        Assignments.Where(x => x.IsSelected).All(x => x.AssignedPanType is not null);
+
+    private void OnSelectedChanged(MidiTrackAssignment assignment, ChangeEventArgs e)
+    {
+        assignment.IsSelected = e.Value switch
+        {
+            bool value => value,
+            string value when bool.TryParse(value, out var parsed) => parsed,
+            _ => assignment.IsSelected
+        };
+
+        if (!assignment.IsSelected)
+            assignment.AssignedPanType = null;
+    }
+
+    private void OnPanChanged(MidiTrackAssignment assignment, ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            assignment.AssignedPanType = null;
+            return;
+        }
+
+        if (Enum.TryParse<PanType>(value, out var panType))
+        {
+            assignment.AssignedPanType = panType;
+            assignment.IsSelected = true;
+        }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (CanConfirm && OnConfirm.HasDelegate)
+            await OnConfirm.InvokeAsync();
+    }
+}

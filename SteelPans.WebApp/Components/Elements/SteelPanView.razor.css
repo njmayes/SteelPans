@@ -1,47 +1,32 @@
 .steel-pan__root {
-    margin: 0;
-    height: 100%;
     display: flex;
-    padding: 0.5rem 0;
-    min-height: 0;
+    justify-content: center;
+    align-items: stretch;
+    width: 100%;
 }
 
 .steel-pan__canvas {
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden;
-    min-height: 0;
-    height: 100%;
     width: 100%;
-    flex: 1 1 auto;
-    box-sizing: border-box;
+    min-height: min(70vw, 34rem);
 }
 
 .steel-pan {
-    display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
-    min-height: 0;
     width: 100%;
-    height: 100%;
-    justify-content: center;
-    align-items: center;
-    user-select: none;
+}
+
+.steel-pan :deep(svg) {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: min(72vh, 34rem);
 }
 
 .steel-pan--empty {
-    padding: 1rem 1.25rem;
-    border-radius: 1rem;
-    background: rgba(248, 250, 252, 0.92);
-    border: 1px solid rgba(148, 163, 184, 0.16);
-    color: #475569;
-}
-
-.steel-pan__note-shape {
-    cursor: pointer;
-}
-
-.steel-pan__note-label {
-    pointer-events: none;
+    display: grid;
+    place-items: center;
+    min-height: 20rem;
+    color: #64748b;
 }

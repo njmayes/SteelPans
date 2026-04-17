@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using SteelPans.WebApp.Components.Elements;
@@ -10,34 +10,38 @@ namespace SteelPans.WebApp.Components.Pages;
 public partial class Pans
 {
     private readonly List<SteelPan> pans_ = [];
+    private readonly List<PanType> availablePanTypes_ = [];
+    private readonly Dictionary<int, List<MidiPanEvent>> midiTrackEventsByIndex_ = [];
+    private readonly Dictionary<Guid, SteelPanView> steelPanViews_ = [];
+
     private int selectedPanIndex_;
     private string? loadError_;
 
-    private bool mergeAllTracks_ = false;
     private IBrowserFile? midiFile_;
-    private List<MidiTrackOption> midiTrackOptions_ = [];
-    private int? selectedTrackIndex_;
-
     private MidiPlaybackInfo? midiPlaybackInfo_;
-    private List<MidiPanEvent> midiEvents_ = [];
+    private List<MidiTrackAssignment> midiTrackAssignments_ = [];
+    private List<MidiAssignedPan> activeMidiPans_ = [];
+
     private CancellationTokenSource? midiPlaybackCts_;
+    private CancellationTokenSource? playbackProgressCts_;
+
     private bool isMidiPlaying_;
     private double? midiStartAt_;
 
     private int metronomeBpm_ = 120;
     private int metronomeBeatsPerBar_ = 4;
     private int metronomeBeatUnit_ = 4;
-    private bool metronomeEnabled_ = false;
+    private bool metronomeEnabled_;
     private int? midiBpmOverride_;
 
     private TimeSpan playbackPosition_;
     private TimeSpan playbackDuration_;
-    private CancellationTokenSource? playbackProgressCts_;
     private TimeSpan playbackSessionStartOffset_ = TimeSpan.Zero;
+
     private bool showChordBuilderPanel_;
     private bool showMetronomePanel_;
 
-    private SteelPanView? steelPanView_;
+    private SteelPanView? previewSteelPanView_;
     private Metronome? metronome_;
 
     private SteelPan? SelectedPan =>
@@ -47,14 +51,8 @@ public partial class Pans
 
     private int EffectiveMidiBpm =>
         midiBpmOverride_
-            ?? midiPlaybackInfo_?.InitialBpm
-            ?? metronomeBpm_;
-
-    private sealed class MidiTrackOption
-    {
-        public required int Index { get; init; }
-        public required string Label { get; init; }
-    }
+        ?? midiPlaybackInfo_?.InitialBpm
+        ?? metronomeBpm_;
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,6 +60,14 @@ public partial class Pans
         {
             pans_.Clear();
             pans_.AddRange(await PanLoader.LoadAsync());
+
+            availablePanTypes_.Clear();
+            availablePanTypes_.AddRange(pans_
+                .Select(x => x.PanType)
+                .Where(x => x != PanType.None)
+                .Distinct()
+                .OrderBy(x => x.ToString()));
+
             selectedPanIndex_ = 0;
         }
         catch (Exception ex)
@@ -70,17 +76,21 @@ public partial class Pans
         }
     }
 
-    private async Task OnMidiSelectedAsync(IBrowserFile e)
+    private async Task OnMidiSelectedAsync(IBrowserFile file)
     {
-        await StopMidiAsync();
+        await StopMidiAsync(resetPosition: true);
 
-        midiFile_ = e;
-
-        midiTrackOptions_.Clear();
-        midiEvents_.Clear();
-        selectedTrackIndex_ = null;
+        midiFile_ = file;
+        midiTrackAssignments_.Clear();
+        midiTrackEventsByIndex_.Clear();
+        activeMidiPans_.Clear();
+        steelPanViews_.Clear();
         midiPlaybackInfo_ = null;
         midiBpmOverride_ = null;
+        midiStartAt_ = null;
+        playbackPosition_ = TimeSpan.Zero;
+        playbackDuration_ = TimeSpan.Zero;
+        playbackSessionStartOffset_ = TimeSpan.Zero;
 
         await using (var playbackInfoStream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024))
         {
@@ -94,95 +104,120 @@ public partial class Pans
             metronomeBeatUnit_ = midiPlaybackInfo_.InitialBeatUnit;
         }
 
-        await using (var trackInfoStream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024))
+        await using (var trackStream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024))
         {
-            var trackInfos = await MidiLoader.GetTrackInfosAsync(trackInfoStream);
+            var playableTracks = await MidiLoader.LoadPlayableTracksAsync(trackStream);
 
-            midiTrackOptions_ = trackInfos
-                .Where(t => t.NoteCount > 0)
-                .Select(BuildTrackOption)
-                .ToList();
+            foreach (var (track, events) in playableTracks)
+            {
+                midiTrackEventsByIndex_[track.Index] = events;
+
+                midiTrackAssignments_.Add(new MidiTrackAssignment
+                {
+                    TrackIndex = track.Index,
+                    TrackLabel = BuildTrackLabel(track),
+                    NoteCount = track.NoteCount,
+                    IsSelected = false,
+                    AssignedPanType = null,
+                });
+            }
         }
 
-        selectedTrackIndex_ = midiTrackOptions_
-            .FirstOrDefault(x => x.Index >= 0)?.Index ?? 0;
-
-        await ReloadSelectedTrackAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnMergeAllTracksChangedAsync(bool mergeTracks)
+    private Task OnPanChanged(ChangeEventArgs e)
     {
-        mergeAllTracks_ = mergeTracks;
-        await ReloadSelectedTrackAsync();
+        if (e.Value is not null && int.TryParse(e.Value.ToString(), out var selectedIndex))
+            selectedPanIndex_ = selectedIndex;
+
+        return InvokeAsync(StateHasChanged);
     }
 
-
-    private async Task OnTrackChanged(ChangeEventArgs e)
+    private async Task ConfirmTrackAssignmentsAsync()
     {
-        if (e.Value is null || !int.TryParse(e.Value.ToString(), out var trackIndex))
-            return;
+        await StopMidiAsync(resetPosition: true);
 
-        selectedTrackIndex_ = trackIndex;
-        await ReloadSelectedTrackAsync();
-    }
+        steelPanViews_.Clear();
+        activeMidiPans_.Clear();
 
-    private async Task OnPanChanged(ChangeEventArgs e)
-    {
-        if (e.Value is null || !int.TryParse(e.Value.ToString(), out var selectedIndex))
-            return;
-
-        selectedPanIndex_ = selectedIndex;
-        await ReloadSelectedTrackAsync();
-    }
-
-    private async Task ReloadSelectedTrackAsync()
-    {
-        await StopMidiAsync();
-
-        if (midiFile_ is null)
+        foreach (var assignment in midiTrackAssignments_
+                     .Where(x => x.IsSelected && x.AssignedPanType is not null))
         {
-            midiEvents_.Clear();
-            playbackDuration_ = TimeSpan.Zero;
-            playbackPosition_ = TimeSpan.Zero;
-            playbackSessionStartOffset_ = TimeSpan.Zero;
-            await InvokeAsync(StateHasChanged);
-            return;
+            var sourcePan = pans_.FirstOrDefault(x => x.PanType == assignment.AssignedPanType!.Value);
+            if (sourcePan is null)
+                continue;
+
+            var rawEvents = midiTrackEventsByIndex_.GetValueOrDefault(assignment.TrackIndex) ?? [];
+            var panInstance = ClonePan(sourcePan);
+            var filteredEvents = PanMidiMapper.FilterToPan(panInstance, rawEvents);
+
+            activeMidiPans_.Add(new MidiAssignedPan
+            {
+                InstanceId = Guid.NewGuid(),
+                TrackIndex = assignment.TrackIndex,
+                TrackLabel = assignment.TrackLabel,
+                PanType = assignment.AssignedPanType.Value,
+                Pan = panInstance,
+                Events = filteredEvents,
+            });
         }
 
-        await using var stream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-
-        var rawEvents = mergeAllTracks_
-            ? await MidiLoader.LoadMergedMidiAsync(stream)
-            : await MidiLoader.LoadSingleTrackAsync(stream, selectedTrackIndex_ ?? 0);
-
-        midiEvents_ = SelectedPan is not null
-            ? PanMidiMapper.FilterToPan(SelectedPan, rawEvents)
-            : rawEvents;
-
-        playbackDuration_ = midiEvents_.Count == 0
-            ? TimeSpan.Zero
-            : midiEvents_.Max(e => e.Start + e.Duration);
-
+        RecalculatePlaybackDuration();
         playbackPosition_ = TimeSpan.Zero;
         playbackSessionStartOffset_ = TimeSpan.Zero;
 
         await InvokeAsync(StateHasChanged);
     }
 
+    private Task OnPreviewSteelPanViewChanged(SteelPanView? view)
+    {
+        previewSteelPanView_ = view;
+        return Task.CompletedTask;
+    }
+
+    private Task RegisterAssignedSteelPanViewAsync(Guid instanceId, SteelPanView? view)
+    {
+        if (view is null)
+        {
+            steelPanViews_.Remove(instanceId);
+            return Task.CompletedTask;
+        }
+
+        steelPanViews_[instanceId] = view;
+        return Task.CompletedTask;
+    }
+
+    private SteelPanView? GetInteractiveSteelPanView()
+    {
+        if (activeMidiPans_.Count > 0)
+        {
+            foreach (var assignedPan in activeMidiPans_)
+            {
+                if (steelPanViews_.TryGetValue(assignedPan.InstanceId, out var assignedView))
+                    return assignedView;
+            }
+        }
+
+        return previewSteelPanView_;
+    }
+
     private async Task SelectChordAsync(HashSet<int> pitchClasses)
     {
-        if (steelPanView_ is null)
+        var view = GetInteractiveSteelPanView();
+        if (view is null)
             return;
 
-        await steelPanView_.SelectChordAsync(pitchClasses);
+        await view.SelectChordAsync(pitchClasses);
     }
 
     private async Task PlaySelectedNotesAsync()
     {
-        if (steelPanView_ is null)
+        var view = GetInteractiveSteelPanView();
+        if (view is null)
             return;
 
-        await steelPanView_.PlaySelectedNotesAsync();
+        await view.PlaySelectedNotesAsync();
     }
 
     private async Task ToggleMidiAsync()
@@ -199,12 +234,19 @@ public partial class Pans
 
     private async Task PlayMidiAsync(TimeSpan startOffset)
     {
-        if (steelPanView_ is null || midiEvents_.Count == 0)
+        if (activeMidiPans_.Count == 0)
             return;
 
-        var playbackEvents = GetPlaybackEventsFromOffset(startOffset);
+        var playbackGroups = activeMidiPans_
+            .Select(x => new
+            {
+                Pan = x,
+                Events = GetPlaybackEventsFromOffset(x.Events, startOffset)
+            })
+            .Where(x => x.Events.Count > 0)
+            .ToList();
 
-        if (playbackEvents.Count == 0)
+        if (playbackGroups.Count == 0)
         {
             playbackPosition_ = playbackDuration_;
             playbackSessionStartOffset_ = playbackDuration_;
@@ -220,8 +262,8 @@ public partial class Pans
         playbackProgressCts_?.Dispose();
         playbackProgressCts_ = new CancellationTokenSource();
 
-        if (metronomeEnabled_)
-            await metronome_!.StopAsync();
+        if (metronomeEnabled_ && metronome_ is not null)
+            await metronome_.StopAsync();
 
         isMidiPlaying_ = true;
         playbackSessionStartOffset_ = ClampPlaybackTime(startOffset);
@@ -236,24 +278,30 @@ public partial class Pans
 
         try
         {
-            midiStartAt_ = await steelPanView_.StartMidiSequenceAsync(
-                playbackEvents,
-                midiPlaybackCts_.Token);
+            var firstGroup = playbackGroups[0];
+            if (!steelPanViews_.TryGetValue(firstGroup.Pan.InstanceId, out var firstView))
+                return;
 
-            if (metronomeEnabled_ && midiStartAt_ is not null)
+            midiStartAt_ = await firstView.StartMidiSequenceAsync(firstGroup.Events, midiPlaybackCts_.Token);
+            if (midiStartAt_ is null)
+                return;
+
+            foreach (var group in playbackGroups.Skip(1))
+            {
+                if (steelPanViews_.TryGetValue(group.Pan.InstanceId, out var view))
+                    await view.StartMidiSequenceAtAsync(group.Events, midiStartAt_.Value, midiPlaybackCts_.Token);
+            }
+
+            if (metronomeEnabled_)
             {
                 var metronomeActions = BuildMetronomeActions(
-                    playbackEvents,
+                    playbackGroups.SelectMany(x => x.Events).OrderBy(x => x.Start).ToList(),
                     metronomeBpm_,
                     metronomeBeatsPerBar_,
                     metronomeBeatUnit_,
                     playbackSessionStartOffset_);
 
-                await JS.InvokeVoidAsync(
-                    "steelPan.playMetronomeSchedule",
-                    metronomeActions,
-                    midiStartAt_.Value);
-
+                await JS.InvokeVoidAsync("steelPan.playMetronomeSchedule", metronomeActions, midiStartAt_.Value);
                 await metronome_!.StartMidiVisualSyncAsync(midiStartAt_.Value, playbackSessionStartOffset_.TotalSeconds);
             }
 
@@ -283,9 +331,6 @@ public partial class Pans
 
     private async Task StopMidiAsync(bool resetPosition = false)
     {
-        if (!isMidiPlaying_)
-            return;
-
         playbackProgressCts_?.Cancel();
         playbackProgressCts_?.Dispose();
         playbackProgressCts_ = null;
@@ -294,8 +339,11 @@ public partial class Pans
         midiPlaybackCts_?.Dispose();
         midiPlaybackCts_ = null;
 
-        if (steelPanView_ is not null)
-            await steelPanView_.StopMidiPlaybackAsync();
+        foreach (var view in steelPanViews_.Values)
+            await view.StopMidiPlaybackAsync();
+
+        if (previewSteelPanView_ is not null)
+            await previewSteelPanView_.StopMidiPlaybackAsync();
 
         if (metronome_ is not null)
             await metronome_.StopAsync();
@@ -308,27 +356,74 @@ public partial class Pans
             playbackPosition_ = TimeSpan.Zero;
             playbackSessionStartOffset_ = TimeSpan.Zero;
         }
+
+        await InvokeAsync(StateHasChanged);
     }
 
-    private IReadOnlyList<MidiPanEvent> GetPlaybackEvents()
+    private IReadOnlyList<MidiPanEvent> GetTempoAdjustedEvents(IReadOnlyList<MidiPanEvent> sourceEvents)
     {
         if (midiPlaybackInfo_ is null)
-            return midiEvents_;
+            return sourceEvents;
 
         var sourceBpm = midiPlaybackInfo_.InitialBpm;
         var targetBpm = EffectiveMidiBpm;
 
         if (sourceBpm <= 0 || targetBpm <= 0 || sourceBpm == targetBpm)
-            return midiEvents_;
+            return sourceEvents;
 
         var scale = (double)sourceBpm / targetBpm;
 
-        return midiEvents_
+        return sourceEvents
             .Select(e => new MidiPanEvent
             {
                 Note = e.Note,
                 Start = TimeSpan.FromTicks((long)(e.Start.Ticks * scale)),
                 Duration = TimeSpan.FromTicks((long)(e.Duration.Ticks * scale)),
+            })
+            .ToList();
+    }
+
+    private IReadOnlyList<MidiPanEvent> GetPlaybackEventsFromOffset(
+        IReadOnlyList<MidiPanEvent> sourceEvents,
+        TimeSpan startOffset)
+    {
+        var playbackEvents = GetTempoAdjustedEvents(sourceEvents)
+            .OrderBy(x => x.Start)
+            .ToList();
+
+        var clampedOffset = ClampPlaybackTime(startOffset);
+
+        if (clampedOffset <= TimeSpan.Zero)
+            return playbackEvents;
+
+        return playbackEvents
+            .Where(e => e.Start + e.Duration > clampedOffset)
+            .Select(e =>
+            {
+                var effectiveStart = e.Start - clampedOffset;
+
+                if (effectiveStart < TimeSpan.Zero)
+                {
+                    var trim = clampedOffset - e.Start;
+                    var remainingDuration = e.Duration - trim;
+
+                    if (remainingDuration <= TimeSpan.Zero)
+                        remainingDuration = TimeSpan.FromMilliseconds(1);
+
+                    return new MidiPanEvent
+                    {
+                        Note = e.Note,
+                        Start = TimeSpan.Zero,
+                        Duration = remainingDuration,
+                    };
+                }
+
+                return new MidiPanEvent
+                {
+                    Note = e.Note,
+                    Start = effectiveStart,
+                    Duration = e.Duration,
+                };
             })
             .ToList();
     }
@@ -350,13 +445,10 @@ public partial class Pans
             return actions;
 
         var offsetSeconds = Math.Max(0.0, playbackOffset.TotalSeconds);
-
         var absoluteBeatPosition = offsetSeconds / secondsPerBeat;
         var completedBeats = (int)Math.Floor(absoluteBeatPosition);
         var beatPhase = absoluteBeatPosition - completedBeats;
 
-        // If we are exactly on a beat boundary, tick immediately.
-        // Otherwise wait until the next beat.
         var firstActionDelay = beatPhase <= 0.000001
             ? 0.0
             : (1.0 - beatPhase) * secondsPerBeat;
@@ -407,10 +499,13 @@ public partial class Pans
     {
         metronomeBpm_ = bpm;
 
-        if (!isMidiPlaying_ && midiPlaybackInfo_ is not null)
+        if (midiPlaybackInfo_ is not null)
+        {
             midiBpmOverride_ = bpm;
+            RecalculatePlaybackDuration();
+        }
 
-        return Task.CompletedTask;
+        return InvokeAsync(StateHasChanged);
     }
 
     private Task OnMetronomeBeatsPerBarChangedAsync(int beatsPerBar)
@@ -445,34 +540,33 @@ public partial class Pans
         metronomeEnabled_ = enabled;
 
         if (!enabled)
-            await metronome_!.StopAsync();
+        {
+            if (metronome_ is not null)
+                await metronome_.StopAsync();
 
-        if (!enabled || !isMidiPlaying_ || midiStartAt_ is null)
+            return;
+        }
+
+        if (!isMidiPlaying_ || midiStartAt_ is null)
             return;
 
+        var absolutePosition = await GetCurrentPlaybackPositionAsync();
         var currentAudioTime = await JS.InvokeAsync<double>("steelPan.getAudioTime");
-        var elapsedSeconds = Math.Max(0, currentAudioTime - midiStartAt_.Value);
 
-        var playbackEvents = GetPlaybackEventsFromOffset(TimeSpan.FromSeconds(elapsedSeconds));
+        var remainingEvents = activeMidiPans_
+            .SelectMany(x => GetPlaybackEventsFromOffset(x.Events, absolutePosition))
+            .OrderBy(x => x.Start)
+            .ToList();
+
         var metronomeActions = BuildMetronomeActions(
-            playbackEvents,
+            remainingEvents,
             metronomeBpm_,
             metronomeBeatsPerBar_,
             metronomeBeatUnit_,
-            TimeSpan.FromSeconds(elapsedSeconds));
+            absolutePosition);
 
-        var remainingActions = metronomeActions
-            .Where(a => a.TimeSeconds >= elapsedSeconds)
-            .Select(a => new MetronomeAction
-            {
-                TimeSeconds = a.TimeSeconds - elapsedSeconds,
-                IsAccent = a.IsAccent,
-            })
-            .ToList();
-
-        await JS.InvokeVoidAsync("steelPan.playMetronomeSchedule", remainingActions, null);
-
-        await metronome_!.StartMidiVisualSyncAsync(midiStartAt_.Value, elapsedSeconds);
+        await JS.InvokeVoidAsync("steelPan.playMetronomeSchedule", metronomeActions, currentAudioTime + 0.05);
+        await metronome_!.StartMidiVisualSyncAsync(midiStartAt_.Value, absolutePosition.TotalSeconds);
     }
 
     private async Task SeekToStartAsync()
@@ -526,47 +620,6 @@ public partial class Pans
         return ClampPlaybackTime((baseOffset ?? playbackSessionStartOffset_) + TimeSpan.FromSeconds(elapsedSeconds));
     }
 
-    private IReadOnlyList<MidiPanEvent> GetPlaybackEventsFromOffset(TimeSpan startOffset)
-    {
-        var playbackEvents = GetPlaybackEvents();
-        var clampedOffset = ClampPlaybackTime(startOffset);
-
-        if (clampedOffset <= TimeSpan.Zero)
-            return playbackEvents;
-
-        return playbackEvents
-            .Where(e => e.Start + e.Duration > clampedOffset)
-            .Select(e =>
-            {
-                var effectiveStart = e.Start - clampedOffset;
-
-                if (effectiveStart < TimeSpan.Zero)
-                {
-                    var trim = clampedOffset - e.Start;
-                    var remainingDuration = e.Duration - trim;
-
-                    if (remainingDuration <= TimeSpan.Zero)
-                        remainingDuration = TimeSpan.FromMilliseconds(1);
-
-                    return new MidiPanEvent
-                    {
-                        Note = e.Note,
-                        Start = TimeSpan.Zero,
-                        Duration = remainingDuration,
-                    };
-                }
-
-                return new MidiPanEvent
-                {
-                    Note = e.Note,
-                    Start = effectiveStart,
-                    Duration = e.Duration,
-                };
-            })
-            .OrderBy(e => e.Start)
-            .ToList();
-    }
-
     private TimeSpan ClampPlaybackTime(TimeSpan time)
     {
         if (time < TimeSpan.Zero)
@@ -591,10 +644,8 @@ public partial class Pans
 
                     await InvokeAsync(() =>
                     {
-                        if (cancellationToken.IsCancellationRequested)
-                            return;
-
-                        StateHasChanged();
+                        if (!cancellationToken.IsCancellationRequested)
+                            StateHasChanged();
                     });
 
                     await Task.Delay(25, cancellationToken);
@@ -606,16 +657,38 @@ public partial class Pans
         }, cancellationToken);
     }
 
-    private static MidiTrackOption BuildTrackOption(MidiTrackInfo track)
+    private void RecalculatePlaybackDuration()
+    {
+        var maxEnd = activeMidiPans_
+            .SelectMany(x => GetTempoAdjustedEvents(x.Events))
+            .DefaultIfEmpty()
+            .Max(x => x is null ? TimeSpan.Zero : x.Start + x.Duration);
+
+        playbackDuration_ = maxEnd;
+        playbackPosition_ = ClampPlaybackTime(playbackPosition_);
+        playbackSessionStartOffset_ = ClampPlaybackTime(playbackSessionStartOffset_);
+    }
+
+    private static SteelPan ClonePan(SteelPan source)
+    {
+        return new SteelPan
+        {
+            PanType = source.PanType,
+            Notes = source.Notes
+                .Select(n => new PanNote
+                {
+                    Note = n.Note,
+                })
+                .ToList(),
+        };
+    }
+
+    private static string BuildTrackLabel(MidiTrackInfo track)
     {
         var name = string.IsNullOrWhiteSpace(track.Name)
             ? $"Track {track.Index + 1}"
-            : $"Track {track.Index + 1}: {track.Name}";
+            : $"Track {track.Index + 1} — {track.Name}";
 
-        return new MidiTrackOption
-        {
-            Index = track.Index,
-            Label = $"{name} ({track.NoteCount} notes)"
-        };
+        return $"{name} ({track.NoteCount} notes)";
     }
 }

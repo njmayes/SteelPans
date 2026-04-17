@@ -1,5 +1,6 @@
 ﻿using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Interaction;
+using Microsoft.AspNetCore.Components.Forms;
 using SteelPans.WebApp.Model;
 
 namespace SteelPans.WebApp.Services;
@@ -155,6 +156,114 @@ public sealed class MidiLoaderService
         return events.Where(x => x.Duration > TimeSpan.Zero).ToList();
     }
 
+    public async Task<List<(MidiTrackInfo Track, List<MidiPanEvent> Events)>> LoadPlayableTracksAsync(
+        Stream midiStream,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(midiStream);
+
+        if (!midiStream.CanRead)
+            throw new ArgumentException("The MIDI stream must be readable.", nameof(midiStream));
+
+        using var buffer = new MemoryStream();
+        await midiStream.CopyToAsync(buffer, cancellationToken);
+        buffer.Position = 0;
+
+        var midiFile = MidiFile.Read(buffer);
+        var tempoMap = midiFile.GetTempoMap();
+        var trackChunks = midiFile.GetTrackChunks().ToList();
+
+        var result = new List<(MidiTrackInfo Track, List<MidiPanEvent> Events)>();
+
+        for (var i = 0; i < trackChunks.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var track = trackChunks[i];
+            var notes = track.GetNotes().OrderBy(n => n.Time).ToList();
+
+            var events = new List<MidiPanEvent>(notes.Count);
+
+            foreach (var midiNote in notes)
+            {
+                var startMetric = TimeConverter.ConvertTo<MetricTimeSpan>(midiNote.Time, tempoMap);
+                var durationMetric = LengthConverter.ConvertTo<MetricTimeSpan>(
+                    midiNote.Length,
+                    midiNote.Time,
+                    tempoMap);
+
+                var duration = ToTimeSpan(durationMetric);
+                if (duration <= TimeSpan.Zero)
+                    continue;
+
+                events.Add(new MidiPanEvent
+                {
+                    Note = Model.Note.FromMidi((int)midiNote.NoteNumber),
+                    Start = ToTimeSpan(startMetric),
+                    Duration = duration,
+                });
+            }
+
+            if (events.Count == 0)
+                continue;
+
+            result.Add((
+                new MidiTrackInfo
+                {
+                    Index = i,
+                    Name = track.Events.OfType<SequenceTrackNameEvent>().FirstOrDefault()?.Text,
+                    NoteCount = events.Count,
+                },
+                events));
+        }
+
+        return result;
+    }
+
+    public async Task<MidiFile> MergeMultipleMidiTracksAsync(IEnumerable<IBrowserFile> files, CancellationToken cancellationToken = default)
+    {
+        var midiFileTasks = files.Select(async x =>
+        {
+            await using var midiStream = x.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            ArgumentNullException.ThrowIfNull(midiStream);
+
+            if (!midiStream.CanRead)
+                throw new ArgumentException("The MIDI stream must be readable.", nameof(midiStream));
+
+
+            using var buffer = new MemoryStream();
+            await midiStream.CopyToAsync(buffer, cancellationToken);
+            buffer.Position = 0;
+
+            return MidiFile.Read(buffer);
+        });
+
+        var midiFiles = await Task.WhenAll(midiFileTasks);
+
+        var tempoMap = midiFiles[0].GetTempoMap();
+
+        var trackChunks = midiFiles
+            .Zip(files)
+            .Select(data =>
+            {
+                var (f, p) = data;
+                var notes = f.GetNotes().ToList();
+                var chunk = notes.ToTrackChunk();
+
+                chunk.Events.Insert(0, new SequenceTrackNameEvent(Path.GetFileNameWithoutExtension(p.Name))
+                {
+                    DeltaTime = 0
+                });
+
+                return chunk;
+            })
+            .ToList();
+
+        return new MidiFile(trackChunks)
+        {
+            TimeDivision = midiFiles[0].TimeDivision
+        };
+    }
 
     public async Task<List<MidiPanEvent>> LoadMergedMidiAsync(
         Stream midiStream,

@@ -1,10 +1,10 @@
-﻿window.steelPan = {
+window.steelPan = {
     _refs: {},
     _audioBuffers: {},
     _audioContext: null,
-    _scheduledSources: [],
-    _scheduledSourcesByNote: {},
-    _scheduledVisualTimers: [],
+    _scheduledSourcesByComponent: {},
+    _scheduledSourcesByNoteByComponent: {},
+    _scheduledVisualTimersByComponent: {},
     _panElements: {},
     _metronomeNodes: [],
 
@@ -15,6 +15,7 @@
     unregister: function (id) {
         delete this._refs[id];
         delete this._panElements[id];
+        this.stopMidiSchedule(id);
         this.clearPlayingVisuals(id);
     },
 
@@ -264,6 +265,17 @@
         }
     },
 
+    _ensureComponentScheduleState: function (componentId) {
+        if (!this._scheduledSourcesByComponent[componentId])
+            this._scheduledSourcesByComponent[componentId] = [];
+
+        if (!this._scheduledSourcesByNoteByComponent[componentId])
+            this._scheduledSourcesByNoteByComponent[componentId] = {};
+
+        if (!this._scheduledVisualTimersByComponent[componentId])
+            this._scheduledVisualTimersByComponent[componentId] = [];
+    },
+
     clearPlayingVisuals: function (componentId, noteKeys) {
         const pan = this._getBoundPan(componentId);
         if (!pan)
@@ -289,6 +301,8 @@
         if (!Array.isArray(noteKeys) || noteKeys.length === 0)
             return;
 
+        this._ensureComponentScheduleState(componentId);
+
         for (const noteKey of noteKeys) {
             this._setNotePlaying(componentId, noteKey, true);
         }
@@ -299,7 +313,7 @@
             }
         }, Math.max(1, durationMs || 120));
 
-        this._scheduledVisualTimers.push(timeoutId);
+        this._scheduledVisualTimersByComponent[componentId].push(timeoutId);
     },
 
     notePointerDown: async function (noteElement, labelElement, componentId, noteKey, event) {
@@ -321,7 +335,8 @@
             this._setNotePlaying(componentId, noteKey, false);
         }, 120);
 
-        this._scheduledVisualTimers.push(timeoutId);
+        this._ensureComponentScheduleState(componentId);
+        this._scheduledVisualTimersByComponent[componentId].push(timeoutId);
     },
 
     playMidiSchedule: async function (componentId, scheduledActions) {
@@ -329,10 +344,24 @@
             return null;
 
         await this.ensureAudioReady();
+        const ctx = this._getAudioContext();
+        const startAt = ctx.currentTime + 0.05;
+
+        await this.playMidiScheduleAt(componentId, scheduledActions, startAt);
+        return startAt;
+    },
+
+    playMidiScheduleAt: async function (componentId, scheduledActions, startAt) {
+        if (!Array.isArray(scheduledActions) || scheduledActions.length === 0)
+            return null;
+
+        await this.ensureAudioReady();
 
         const ctx = this._getAudioContext();
+        const actualStartAt = typeof startAt === "number" ? startAt : (ctx.currentTime + 0.05);
 
         this.stopMidiSchedule(componentId);
+        this._ensureComponentScheduleState(componentId);
 
         const uniqueNoteKeys = [...new Set(
             scheduledActions
@@ -344,9 +373,6 @@
             await this._loadBuffer(noteKey);
         }
 
-        const startAt = ctx.currentTime + 0.05;
-        this._scheduledSourcesByNote = {};
-
         const sortedActions = scheduledActions
             .filter(action =>
                 action &&
@@ -355,10 +381,15 @@
                 typeof action.isNoteOn === "boolean")
             .sort((a, b) => a.timeSeconds - b.timeSeconds);
 
-        const noteOnActions = sortedActions.filter(action => action.isNoteOn);
+        const sources = this._scheduledSourcesByComponent[componentId];
+        const perNoteMap = this._scheduledSourcesByNoteByComponent[componentId];
+        const timers = this._scheduledVisualTimersByComponent[componentId];
 
-        for (const action of noteOnActions) {
-            const when = startAt + action.timeSeconds;
+        for (const action of sortedActions) {
+            if (!action.isNoteOn)
+                continue;
+
+            const when = actualStartAt + action.timeSeconds;
             const buffer = await this._loadBuffer(action.noteKey);
 
             const source = ctx.createBufferSource();
@@ -374,31 +405,28 @@
                 startTime: when
             };
 
-            this._scheduledSources.push(entry);
+            sources.push(entry);
 
-            if (!this._scheduledSourcesByNote[normalizedNoteKey]) {
-                this._scheduledSourcesByNote[normalizedNoteKey] = [];
-            }
+            if (!perNoteMap[normalizedNoteKey])
+                perNoteMap[normalizedNoteKey] = [];
 
-            this._scheduledSourcesByNote[normalizedNoteKey].push(entry);
+            perNoteMap[normalizedNoteKey].push(entry);
 
             source.onended = () => {
-                const scheduledIndex = this._scheduledSources.indexOf(entry);
-                if (scheduledIndex >= 0) {
-                    this._scheduledSources.splice(scheduledIndex, 1);
-                }
+                const scheduledIndex = sources.indexOf(entry);
+                if (scheduledIndex >= 0)
+                    sources.splice(scheduledIndex, 1);
 
-                const perNote = this._scheduledSourcesByNote[normalizedNoteKey];
-                if (perNote) {
-                    const noteIndex = perNote.indexOf(entry);
-                    if (noteIndex >= 0) {
-                        perNote.splice(noteIndex, 1);
-                    }
+                const perNote = perNoteMap[normalizedNoteKey];
+                if (!perNote)
+                    return;
 
-                    if (perNote.length === 0) {
-                        delete this._scheduledSourcesByNote[normalizedNoteKey];
-                    }
-                }
+                const noteIndex = perNote.indexOf(entry);
+                if (noteIndex >= 0)
+                    perNote.splice(noteIndex, 1);
+
+                if (perNote.length === 0)
+                    delete perNoteMap[normalizedNoteKey];
             };
         }
 
@@ -406,11 +434,11 @@
 
         for (const action of noteOffActions) {
             const normalizedNoteKey = this._normalizeEnharmonic(action.noteKey);
-            const perNote = this._scheduledSourcesByNote[normalizedNoteKey];
+            const perNote = perNoteMap[normalizedNoteKey];
             if (!perNote || perNote.length === 0)
                 continue;
 
-            const when = startAt + action.timeSeconds;
+            const when = actualStartAt + action.timeSeconds;
 
             let candidateIndex = -1;
             for (let i = 0; i < perNote.length; i++) {
@@ -432,16 +460,16 @@
         }
 
         for (const action of sortedActions) {
-            const delayMs = Math.max(0, (startAt + action.timeSeconds - ctx.currentTime) * 1000.0);
+            const delayMs = Math.max(0, (actualStartAt + action.timeSeconds - ctx.currentTime) * 1000.0);
 
             const timeoutId = window.setTimeout(() => {
                 this._setNotePlaying(componentId, action.noteKey, action.isNoteOn);
             }, delayMs);
 
-            this._scheduledVisualTimers.push(timeoutId);
+            timers.push(timeoutId);
         }
 
-        return startAt;
+        return actualStartAt;
     },
 
     playMetronomeSchedule: async function (actions, startAt) {
@@ -479,9 +507,8 @@
 
             oscillator.onended = () => {
                 const index = this._metronomeNodes.indexOf(oscillator);
-                if (index >= 0) {
+                if (index >= 0)
                     this._metronomeNodes.splice(index, 1);
-                }
             };
         }
 
@@ -514,31 +541,37 @@
 
         oscillator.onended = () => {
             const index = this._metronomeNodes.indexOf(oscillator);
-            if (index >= 0) {
+            if (index >= 0)
                 this._metronomeNodes.splice(index, 1);
-            }
         };
     },
 
     stopMidiSchedule: function (componentId) {
-        for (const entry of this._scheduledSources) {
+        if (!componentId) {
+            for (const id of Object.keys(this._scheduledSourcesByComponent)) {
+                this.stopMidiSchedule(id);
+            }
+            return;
+        }
+
+        const sources = this._scheduledSourcesByComponent[componentId] || [];
+        const timers = this._scheduledVisualTimersByComponent[componentId] || [];
+
+        for (const entry of sources) {
             try {
                 entry.source.stop();
             } catch {
             }
         }
 
-        for (const timerId of this._scheduledVisualTimers) {
+        for (const timerId of timers) {
             window.clearTimeout(timerId);
         }
 
-        this._scheduledSources = [];
-        this._scheduledSourcesByNote = {};
-        this._scheduledVisualTimers = [];
-
-        if (componentId) {
-            this.clearPlayingVisuals(componentId);
-        }
+        this._scheduledSourcesByComponent[componentId] = [];
+        this._scheduledSourcesByNoteByComponent[componentId] = {};
+        this._scheduledVisualTimersByComponent[componentId] = [];
+        this.clearPlayingVisuals(componentId);
     },
 
     stopMetronome: function () {
@@ -550,32 +583,5 @@
         }
 
         this._metronomeNodes = [];
-    },
-
-    beginMetronomeWeightDrag: function (trackElement, dotNetRef, initialClientY) {
-        if (!trackElement || !dotNetRef)
-            return;
-
-        const update = (clientY) => {
-            const rect = trackElement.getBoundingClientRect();
-            const localY = clientY - rect.top;
-            dotNetRef.invokeMethodAsync("OnMetronomeWeightDragged", localY, rect.height);
-        };
-
-        const onPointerMove = (event) => {
-            update(event.clientY);
-        };
-
-        const stop = () => {
-            window.removeEventListener("pointermove", onPointerMove);
-            window.removeEventListener("pointerup", stop);
-            window.removeEventListener("pointercancel", stop);
-        };
-
-        window.addEventListener("pointermove", onPointerMove);
-        window.addEventListener("pointerup", stop);
-        window.addEventListener("pointercancel", stop);
-
-        update(initialClientY);
     }
 };

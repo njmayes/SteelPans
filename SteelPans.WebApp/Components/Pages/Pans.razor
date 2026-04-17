@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @page "/pans"
 @using SteelPans.WebApp.Model
 @using SteelPans.WebApp.Services
@@ -18,7 +18,7 @@
             @if (pans_.Count > 0)
             {
                 <div class="pans-page__hero-field">
-                    <label for="pan-select" class="form-label">Select a pan</label>
+                    <label for="pan-select" class="form-label">Preview pan</label>
                     <select id="pan-select"
                             class="form-select"
                             value="@selectedPanIndex_"
@@ -43,18 +43,24 @@
     }
     else
     {
+        <section class="pans-page__top-grid">
+            <MidiLoader Disabled="false"
+                        OnMidiSelected="OnMidiSelectedAsync" />
+
+            <MidiTrackAssignmentPicker Assignments="@midiTrackAssignments_"
+                                       AvailablePanTypes="@availablePanTypes_"
+                                       Disabled="@isMidiPlaying_"
+                                       OnConfirm="ConfirmTrackAssignmentsAsync" />
+        </section>
+
         <section class="pans-page__midi-controls">
-            <MidiLoader Disabled="@(midiEvents_.Count == 0)"
-                        OnMidiSelected="OnMidiSelectedAsync"
-                        OnMergeAllTracksChanged="OnMergeAllTracksChangedAsync"/>
-            
             <MidiPlaybackControl CurrentTime="@playbackPosition_"
                                  TotalTime="@playbackDuration_"
                                  IsPlaying="@isMidiPlaying_"
-                                 CanSeek="@(midiEvents_.Count > 0)"
+                                 CanSeek="@(activeMidiPans_.Count > 0)"
                                  CanGoToStart="@(playbackPosition_ > TimeSpan.Zero)"
-                                 CanGoNext="@(midiEvents_.Count > 0 && playbackPosition_ < playbackDuration_)"
-                                 Disabled="@(midiEvents_.Count == 0)"
+                                 CanGoNext="@(activeMidiPans_.Count > 0 && playbackPosition_ < playbackDuration_)"
+                                 Disabled="@(activeMidiPans_.Count == 0)"
                                  OnPlayPause="ToggleMidiAsync"
                                  OnBackToStart="SeekToStartAsync"
                                  OnNextTrack="HandleNextTrackAsync"
@@ -73,7 +79,7 @@
                                   OnPlay="PlaySelectedNotesAsync"
                                   Disabled="@isMidiPlaying_" />
                 </OverlayShell>
-                    
+
                 <OverlayShell Side="right"
                               Label="Metronome"
                               IconClass="bi bi-music-note-beamed"
@@ -104,14 +110,30 @@
                                    BeatsPerBarChanged="OnMetronomeBeatsPerBarChangedAsync"
                                    BeatUnit="@metronomeBeatUnit_"
                                    BeatUnitChanged="OnMetronomeBeatUnitChangedAsync"
-                                   MidiLoaded="@(midiEvents_.Count > 0)"
+                                   MidiLoaded="@(activeMidiPans_.Count > 0)"
                                    MidiStartAt="@midiStartAt_" />
                     </ChildContent>
-
                 </OverlayShell>
             </div>
-            
-            <SteelPanView @ref="steelPanView_" Pan="@SelectedPan" />
+
+            <div class="pans-page__pan-stage">
+                <div class="pans-page__assigned-pans">
+                    @foreach (var assignedPan in activeMidiPans_)
+                    {
+                        <section class="sp-section pans-page__assigned-pan" @key="assignedPan.InstanceId">
+                            <header class="pans-page__assigned-pan-header">
+                                <div>
+                                    <div class="pans-page__assigned-pan-title">@assignedPan.TrackLabel</div>
+                                    <div class="pans-page__assigned-pan-subtitle">@assignedPan.PanType.ToSpacedPascal()</div>
+                                </div>
+                            </header>
+
+                            <SteelPanView Pan="@assignedPan.Pan"
+                                          InstanceChanged="@(view => RegisterAssignedSteelPanViewAsync(assignedPan.InstanceId, view))" />
+                        </section>
+                    }
+                </div>
+            </div>
         </section>
     }
 </div>

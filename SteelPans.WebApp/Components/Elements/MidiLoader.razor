@@ -1,15 +1,7 @@
-﻿<div class="sp-section midi-loader">
+<div class="sp-section midi-loader">
     <div class="midi-loader__top">
         <label class="form-label">MIDI file</label>
-        <label class="midi-loader__merge @(Disabled ? "midi-loader__merge-disabled" : "")">
-            <input type="checkbox"
-                   checked="@mergeAllTracks_"
-                   disabled="@Disabled"
-                   @onchange="OnMergeAllTracksChangedAsync" />
-            <span class="midi-loader__merge-label">
-                Merge Tracks
-            </span>
-        </label>
+        <div class="midi-loader__hint">Upload a MIDI and then assign each playable track to a pan.</div>
     </div>
 
     <FilePicker OnFileSelected="OnMidiSelected"
@@ -21,21 +13,5 @@
     public bool Disabled { get; set; }
 
     [Parameter]
-    public EventCallback< IBrowserFile > OnMidiSelected { get; set; }
-
-    [Parameter]
-    public EventCallback<bool> OnMergeAllTracksChanged { get; set; }
-
-    private bool mergeAllTracks_ = false;
-    private string midiFileName_ = string.Empty;
-    
-    private async Task OnMergeAllTracksChangedAsync(ChangeEventArgs e)
-    {
-        if (e.Value is bool value)
-            mergeAllTracks_ = value;
-        else
-            mergeAllTracks_ = string.Equals(e.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
-
-        await OnMergeAllTracksChanged.InvokeAsync(mergeAllTracks_);
-    }
+    public EventCallback<IBrowserFile> OnMidiSelected { get; set; }
 }

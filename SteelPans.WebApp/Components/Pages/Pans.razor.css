@@ -1,4 +1,4 @@
-﻿.pans-page {
+.pans-page {
     display: flex;
     flex-direction: column;
     min-height: 100dvh;
@@ -18,6 +18,7 @@
     display: flex;
     flex-direction: row;
     justify-content: space-between;
+    gap: 1rem;
 }
 
 .pans-page__hero_headings {
@@ -50,39 +51,40 @@
     gap: 0.1rem;
 }
 
-    .pans-page__hero-field .form-label {
-        display: inline-block;
-        margin-bottom: 0;
-        font-size: min(3vw, 0.9rem);
-        padding-right: 0.3rem;
-        font-weight: 800;
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
-        color: #334155;
-    }
+.pans-page__hero-field .form-label {
+    display: inline-block;
+    margin-bottom: 0;
+    font-size: min(3vw, 0.9rem);
+    padding-right: 0.3rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #334155;
+}
 
-    .pans-page__hero-field .form-select {
-        width: fit-content;
-        font-size: min(3vw, 0.9rem);
-        padding: 0.25rem 2rem 0.25rem 0.75rem;
-    }
+.pans-page__hero-field .form-select {
+    width: fit-content;
+    font-size: min(3vw, 0.9rem);
+    padding: 0.25rem 2rem 0.25rem 0.75rem;
+}
+
+.pans-page__top-grid {
+    display: grid;
+    grid-template-columns: minmax(17rem, 1.05fr) minmax(23rem, 1.95fr);
+    gap: clamp(0.35rem, 0.25rem + 0.4vw, 0.9rem);
+    align-items: start;
+}
 
 .pans-page__midi-controls {
     display: grid;
-    grid-template-columns: 2.5fr 3fr;
+    grid-template-columns: 1fr;
     gap: clamp(0.25rem, 0.2rem + 0.3vw, 0.9rem);
     align-items: stretch;
-}
-
-
-.pans-page__chord-panel {
-    padding: 0.8rem 0.9rem;
 }
 
 .pans-page__content {
     position: relative;
     flex: 1 1 0;
-    gap: 0.25rem;
     min-height: 23rem;
 }
 
@@ -91,6 +93,45 @@
     inset: 0;
     z-index: 20;
     pointer-events: none;
+}
+
+.pans-page__pan-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.pans-page__preview-pan,
+.pans-page__assigned-pan {
+    padding: 0.6rem;
+}
+
+.pans-page__assigned-pans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+    gap: 0.5rem;
+}
+
+.pans-page__assigned-pan-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.55rem;
+}
+
+.pans-page__assigned-pan-title {
+    font-size: 0.96rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.pans-page__assigned-pan-subtitle {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .metronome-shell__status-switch {
@@ -103,9 +144,9 @@
     user-select: none;
 }
 
-    .metronome-shell__status-switch:hover .metronome-shell__status-switch-track {
-        filter: brightness(1.02);
-    }
+.metronome-shell__status-switch:hover .metronome-shell__status-switch-track {
+    filter: brightness(1.02);
+}
 
 .metronome-shell__status-switch-input {
     position: absolute;
@@ -151,9 +192,9 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
-    .metronome-shell__status-switch-input:checked + .metronome-shell__status-switch-track .metronome-shell__status-switch-thumb {
-        transform: translateX(calc(clamp(3rem, var(--switch-base-size) + 1vw, 4rem) - calc(var(--switch-base-size) * 0.46) - clamp(0.28rem, 0.28rem + 0.16vw, 0.4rem)));
-    }
+.metronome-shell__status-switch-input:checked + .metronome-shell__status-switch-track .metronome-shell__status-switch-thumb {
+    transform: translateX(calc(clamp(3rem, var(--switch-base-size) + 1vw, 4rem) - calc(var(--switch-base-size) * 0.46) - clamp(0.28rem, 0.28rem + 0.16vw, 0.4rem)));
+}
 
 .metronome-shell__status-switch:hover .metronome-shell__status-switch-track {
     filter: brightness(1.04);
@@ -169,22 +210,8 @@
     filter: saturate(0.75);
 }
 
-
-
-/* RESPONSIVE */
-
-@media (max-width: 1180px) {
-    .steel-pan__midi-row {
-        grid-template-columns: minmax(0, 1fr) auto;
-    }
-}
-
-@media (max-width: 900px) {
-    .steel-pan__midi-actions {
-        justify-content: flex-start;
-    }
-
-    .steel-pan__midi-row--playback {
+@media (max-width: 1050px) {
+    .pans-page__top-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -195,13 +222,22 @@
         overflow: visible;
     }
 
+    .pans-page__hero-content {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .pans-page__hero-field {
+        align-items: stretch;
+    }
+
+    .pans-page__hero-field .form-select {
+        width: 100%;
+    }
+
     .pans-page__content {
-        height: auto;
         min-height: 0;
         overflow: visible;
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
-        position: relative;
     }
 
     .pans-page__main-toggles {

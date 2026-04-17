@@ -2,7 +2,12 @@
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
+    width: 100%;
     padding: 0.85rem 0.95rem;
+}
+
+.midi-loader--disabled {
+    opacity: 0.75;
 }
 
 .midi-loader__top {
@@ -11,16 +16,250 @@
     gap: 0.15rem;
 }
 
-.midi-loader__top .form-label {
-    margin: 0;
-    font-size: 0.88rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #334155;
-}
+    .midi-loader__top .form-label {
+        margin: 0;
+        font-size: 0.88rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #334155;
+    }
 
 .midi-loader__hint {
     font-size: 0.84rem;
     color: #64748b;
+}
+
+.midi-loader__row {
+    display: grid;
+    grid-template-columns: minmax(18rem, 1.35fr) minmax(16rem, 1fr) auto;
+    gap: 0.7rem;
+    align-items: end;
+    width: 100%;
+}
+
+.midi-loader__file {
+    min-width: 0;
+}
+
+    .midi-loader__file:only-child {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
+    .midi-loader__file :deep(.file-picker) {
+        width: 100%;
+    }
+
+.midi-loader__assign-field,
+.midi-loader__add-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+    .midi-loader__assign-field .form-label,
+    .midi-loader__add-wrap .form-label {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #475569;
+    }
+
+.midi-loader__button-label {
+    visibility: hidden;
+}
+
+.midi-loader__add-button {
+    min-width: 2.75rem;
+    height: calc(1.5em + 0.75rem + 2px);
+    display: inline-grid;
+    place-items: center;
+    padding: 0 0.9rem;
+}
+
+.midi-loader__assigned {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.midi-loader__assigned-title {
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #475569;
+}
+
+.midi-loader__assigned-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.midi-loader__assigned-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.85rem;
+    background: rgba(248, 250, 252, 0.96);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.midi-loader__assigned-copy {
+    min-width: 0;
+}
+
+.midi-loader__assigned-track {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.midi-loader__assigned-pan {
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.midi-loader__empty {
+    padding-top: 0.15rem;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+/* modal */
+
+.midi-loader-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.midi-loader-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+}
+
+.midi-loader-modal__card {
+    width: min(100%, 28rem);
+    background: #ffffff;
+    border-radius: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28), 0 8px 24px rgba(15, 23, 42, 0.12);
+    overflow: hidden;
+}
+
+.midi-loader-modal__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1rem 0.75rem;
+}
+
+.midi-loader-modal__title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.midi-loader-modal__subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.84rem;
+    color: #64748b;
+}
+
+.midi-loader-modal__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0 1rem 1rem;
+}
+
+    .midi-loader-modal__body .form-label {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #475569;
+    }
+
+.midi-loader-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0 1rem 1rem;
+}
+
+    .midi-loader-modal__actions .btn {
+        min-width: 6rem;
+    }
+
+/* responsive */
+
+@media (max-width: 900px) {
+    .midi-loader__row {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .midi-loader__button-label {
+        display: none;
+    }
+
+    .midi-loader__add-button {
+        width: 100%;
+    }
+
+    .midi-loader__assigned-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+@media (max-width: 520px) {
+    .midi-loader {
+        padding: 0.75rem;
+    }
+
+    .midi-loader-modal {
+        padding: 0.6rem;
+    }
+
+    .midi-loader-modal__card {
+        width: 100%;
+        border-radius: 0.85rem;
+    }
+
+    .midi-loader-modal__header,
+    .midi-loader-modal__body,
+    .midi-loader-modal__actions {
+        padding-left: 0.85rem;
+        padding-right: 0.85rem;
+    }
+
+    .midi-loader-modal__actions {
+        flex-direction: column-reverse;
+    }
+
+        .midi-loader-modal__actions .btn {
+            width: 100%;
+        }
 }

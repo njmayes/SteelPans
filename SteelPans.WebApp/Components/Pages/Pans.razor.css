@@ -69,10 +69,7 @@
 }
 
 .pans-page__top-grid {
-    display: grid;
-    grid-template-columns: minmax(17rem, 1.05fr) minmax(23rem, 1.95fr);
-    gap: clamp(0.35rem, 0.25rem + 0.4vw, 0.9rem);
-    align-items: start;
+    display: block;
 }
 
 .pans-page__midi-controls {

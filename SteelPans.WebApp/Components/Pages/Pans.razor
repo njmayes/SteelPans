@@ -44,13 +44,13 @@
     else
     {
         <section class="pans-page__top-grid">
-            <MidiLoader Disabled="false"
-                        OnMidiSelected="OnMidiSelectedAsync" />
-
-            <MidiTrackAssignmentPicker Assignments="@midiTrackAssignments_"
-                                       AvailablePanTypes="@availablePanTypes_"
-                                       Disabled="@isMidiPlaying_"
-                                       OnConfirm="ConfirmTrackAssignmentsAsync" />
+            <MidiLoader Disabled="@isMidiPlaying_"
+                        Tracks="@midiTracks_"
+                        Assignments="@midiTrackAssignments_"
+                        AvailablePanTypes="@availablePanTypes_"
+                        OnMidiSelected="OnMidiSelectedAsync"
+                        OnAddAssignment="AddTrackAssignmentAsync"
+                        OnRemoveAssignment="RemoveTrackAssignmentAsync" />
         </section>
 
         <section class="pans-page__midi-controls">
@@ -121,13 +121,6 @@
                     @foreach (var assignedPan in activeMidiPans_)
                     {
                         <section class="sp-section pans-page__assigned-pan" @key="assignedPan.InstanceId">
-                            <header class="pans-page__assigned-pan-header">
-                                <div>
-                                    <div class="pans-page__assigned-pan-title">@assignedPan.TrackLabel</div>
-                                    <div class="pans-page__assigned-pan-subtitle">@assignedPan.PanType.ToSpacedPascal()</div>
-                                </div>
-                            </header>
-
                             <SteelPanView Pan="@assignedPan.Pan"
                                           InstanceChanged="@(view => RegisterAssignedSteelPanViewAsync(assignedPan.InstanceId, view))" />
                         </section>

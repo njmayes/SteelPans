@@ -11,6 +11,7 @@ public partial class Pans
 {
     private readonly List<SteelPan> pans_ = [];
     private readonly List<PanType> availablePanTypes_ = [];
+    private readonly List<MidiTrackInfo> midiTracks_ = [];
     private readonly Dictionary<int, List<MidiPanEvent>> midiTrackEventsByIndex_ = [];
     private readonly Dictionary<Guid, SteelPanView> steelPanViews_ = [];
 
@@ -81,6 +82,7 @@ public partial class Pans
         await StopMidiAsync(resetPosition: true);
 
         midiFile_ = file;
+        midiTracks_.Clear();
         midiTrackAssignments_.Clear();
         midiTrackEventsByIndex_.Clear();
         activeMidiPans_.Clear();
@@ -110,20 +112,79 @@ public partial class Pans
 
             foreach (var (track, events) in playableTracks)
             {
+                midiTracks_.Add(track);
                 midiTrackEventsByIndex_[track.Index] = events;
-
-                midiTrackAssignments_.Add(new MidiTrackAssignment
-                {
-                    TrackIndex = track.Index,
-                    TrackLabel = BuildTrackLabel(track),
-                    NoteCount = track.NoteCount,
-                    IsSelected = false,
-                    AssignedPanType = null,
-                });
             }
         }
 
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AddTrackAssignmentAsync(MidiTrackAssignment assignment)
+    {
+        await StopMidiAsync(resetPosition: true);
+
+        midiTrackAssignments_.RemoveAll(x => x.TrackIndex == assignment.TrackIndex);
+        activeMidiPans_.RemoveAll(x => x.TrackIndex == assignment.TrackIndex);
+
+        var assignedPan = BuildAssignedPan(assignment);
+        if (assignedPan is null)
+            return;
+
+        midiTrackAssignments_.Add(assignment);
+        activeMidiPans_.Add(assignedPan);
+
+        RecalculatePlaybackDuration();
+        playbackPosition_ = TimeSpan.Zero;
+        playbackSessionStartOffset_ = TimeSpan.Zero;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RemoveTrackAssignmentAsync(int trackIndex)
+    {
+        await StopMidiAsync(resetPosition: true);
+
+        midiTrackAssignments_.RemoveAll(x => x.TrackIndex == trackIndex);
+
+        var removedPans = activeMidiPans_
+            .Where(x => x.TrackIndex == trackIndex)
+            .ToList();
+
+        foreach (var removedPan in removedPans)
+            steelPanViews_.Remove(removedPan.InstanceId);
+
+        activeMidiPans_.RemoveAll(x => x.TrackIndex == trackIndex);
+
+        RecalculatePlaybackDuration();
+        playbackPosition_ = TimeSpan.Zero;
+        playbackSessionStartOffset_ = TimeSpan.Zero;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private MidiAssignedPan? BuildAssignedPan(MidiTrackAssignment assignment)
+    {
+        if (assignment.AssignedPanType is null)
+            return null;
+
+        var sourcePan = pans_.FirstOrDefault(x => x.PanType == assignment.AssignedPanType.Value);
+        if (sourcePan is null)
+            return null;
+
+        var rawEvents = midiTrackEventsByIndex_.GetValueOrDefault(assignment.TrackIndex) ?? [];
+        var panInstance = ClonePan(sourcePan);
+        var filteredEvents = PanMidiMapper.FilterToPan(panInstance, rawEvents);
+
+        return new MidiAssignedPan
+        {
+            InstanceId = Guid.NewGuid(),
+            TrackIndex = assignment.TrackIndex,
+            TrackLabel = assignment.TrackLabel,
+            PanType = assignment.AssignedPanType.Value,
+            Pan = panInstance,
+            Events = filteredEvents,
+        };
     }
 
     private Task OnPanChanged(ChangeEventArgs e)
@@ -132,42 +193,6 @@ public partial class Pans
             selectedPanIndex_ = selectedIndex;
 
         return InvokeAsync(StateHasChanged);
-    }
-
-    private async Task ConfirmTrackAssignmentsAsync()
-    {
-        await StopMidiAsync(resetPosition: true);
-
-        steelPanViews_.Clear();
-        activeMidiPans_.Clear();
-
-        foreach (var assignment in midiTrackAssignments_
-                     .Where(x => x.IsSelected && x.AssignedPanType is not null))
-        {
-            var sourcePan = pans_.FirstOrDefault(x => x.PanType == assignment.AssignedPanType!.Value);
-            if (sourcePan is null)
-                continue;
-
-            var rawEvents = midiTrackEventsByIndex_.GetValueOrDefault(assignment.TrackIndex) ?? [];
-            var panInstance = ClonePan(sourcePan);
-            var filteredEvents = PanMidiMapper.FilterToPan(panInstance, rawEvents);
-
-            activeMidiPans_.Add(new MidiAssignedPan
-            {
-                InstanceId = Guid.NewGuid(),
-                TrackIndex = assignment.TrackIndex,
-                TrackLabel = assignment.TrackLabel,
-                PanType = assignment.AssignedPanType.Value,
-                Pan = panInstance,
-                Events = filteredEvents,
-            });
-        }
-
-        RecalculatePlaybackDuration();
-        playbackPosition_ = TimeSpan.Zero;
-        playbackSessionStartOffset_ = TimeSpan.Zero;
-
-        await InvokeAsync(StateHasChanged);
     }
 
     private Task OnPreviewSteelPanViewChanged(SteelPanView? view)
@@ -310,40 +335,46 @@ public partial class Pans
         catch (OperationCanceledException)
         {
         }
+        finally
+        {
+            if (!midiPlaybackCts_.IsCancellationRequested)
+            {
+                isMidiPlaying_ = false;
+                midiStartAt_ = null;
+                playbackPosition_ = playbackDuration_;
+                playbackSessionStartOffset_ = playbackDuration_;
+
+                if (metronome_ is not null)
+                    await metronome_.StopAsync();
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
     }
 
     private async Task PauseMidiAsync()
     {
-        if (!isMidiPlaying_)
-            return;
-
-        playbackPosition_ = await GetCurrentPlaybackPositionAsync();
-        playbackSessionStartOffset_ = playbackPosition_;
+        playbackSessionStartOffset_ = await GetCurrentPlaybackPositionAsync();
 
         await StopMidiAsync(resetPosition: false);
+
+        playbackPosition_ = playbackSessionStartOffset_;
+        await InvokeAsync(StateHasChanged);
     }
 
-    private async Task RestartMidiFromAsync(TimeSpan position)
+    private async Task RestartMidiFromAsync(TimeSpan startOffset)
     {
         await StopMidiAsync(resetPosition: false);
-        await PlayMidiAsync(position);
+        await PlayMidiAsync(startOffset);
     }
 
     private async Task StopMidiAsync(bool resetPosition = false)
     {
-        playbackProgressCts_?.Cancel();
-        playbackProgressCts_?.Dispose();
-        playbackProgressCts_ = null;
-
         midiPlaybackCts_?.Cancel();
-        midiPlaybackCts_?.Dispose();
-        midiPlaybackCts_ = null;
+        playbackProgressCts_?.Cancel();
 
-        foreach (var view in steelPanViews_.Values)
-            await view.StopMidiPlaybackAsync();
-
-        if (previewSteelPanView_ is not null)
-            await previewSteelPanView_.StopMidiPlaybackAsync();
+        foreach (var steelPanView in steelPanViews_.Values)
+            await steelPanView.StopMidiPlaybackAsync();
 
         if (metronome_ is not null)
             await metronome_.StopAsync();
@@ -362,10 +393,7 @@ public partial class Pans
 
     private IReadOnlyList<MidiPanEvent> GetTempoAdjustedEvents(IReadOnlyList<MidiPanEvent> sourceEvents)
     {
-        if (midiPlaybackInfo_ is null)
-            return sourceEvents;
-
-        var sourceBpm = midiPlaybackInfo_.InitialBpm;
+        var sourceBpm = midiPlaybackInfo_?.InitialBpm ?? metronomeBpm_;
         var targetBpm = EffectiveMidiBpm;
 
         if (sourceBpm <= 0 || targetBpm <= 0 || sourceBpm == targetBpm)
@@ -681,14 +709,5 @@ public partial class Pans
                 })
                 .ToList(),
         };
-    }
-
-    private static string BuildTrackLabel(MidiTrackInfo track)
-    {
-        var name = string.IsNullOrWhiteSpace(track.Name)
-            ? $"Track {track.Index + 1}"
-            : $"Track {track.Index + 1} — {track.Name}";
-
-        return $"{name} ({track.NoteCount} notes)";
     }
 }

@@ -1,6 +1,6 @@
 ﻿@using Microsoft.AspNetCore.Components.Web
 
-<div class="sp-section midi-playback @(Disabled ? "midi-playback--disabled" : null)">
+<div class="sp-section midi-playback">
     <div class="midi-playback__top-row">
         <input class="midi-playback__slider"
                type="range"
@@ -9,7 +9,6 @@
                step="0.01"
                value="@DisplaySecondsString"
                style="--value:@DisplaySecondsString; --max:@MaxSecondsString;"
-               disabled="@(!CanSeek)"
                aria-label="Playback position"
                @oninput="HandleSliderInput"
                @onchange="HandleSliderChange"
@@ -35,7 +34,6 @@
                     type="button"
                     title="@(IsPlaying ? "Pause" : "Play")"
                     aria-label="@(IsPlaying ? "Pause" : "Play")"
-                    disabled="@Disabled"
                     @onclick="HandlePlayPause">
                 <span class="bi @(IsPlaying ? "bi-pause-fill" : "bi-play-fill")" aria-hidden="true"></span>
             </button>
@@ -60,8 +58,6 @@
     [Parameter] public TimeSpan TotalTime { get; set; }
     [Parameter] public bool IsPlaying { get; set; }
 
-    [Parameter] public bool Disabled { get; set; }
-    [Parameter] public bool CanSeek { get; set; } = true;
     [Parameter] public bool CanGoNext { get; set; }
     [Parameter] public bool CanGoToStart { get; set; } = true;
 
@@ -92,7 +88,7 @@
 
     private async Task HandlePlayPause()
     {
-        if (Disabled || !OnPlayPause.HasDelegate)
+        if (!OnPlayPause.HasDelegate)
             return;
 
         await OnPlayPause.InvokeAsync();
@@ -116,25 +112,16 @@
 
     private void BeginSeek()
     {
-        if (!CanSeek)
-            return;
-
         isSeeking_ = true;
     }
 
     private async Task EndSeek()
     {
-        if (!CanSeek)
-            return;
-
         await CommitPreviewAsync();
     }
 
     private async Task HandleSliderInput(ChangeEventArgs args)
     {
-        if (!CanSeek)
-            return;
-
         isSeeking_ = true;
         previewSeconds_ = ParseSeconds(args.Value);
         await NotifyPreviewChangedAsync();
@@ -142,9 +129,6 @@
 
     private async Task HandleSliderChange(ChangeEventArgs args)
     {
-        if (!CanSeek)
-            return;
-
         previewSeconds_ = ParseSeconds(args.Value);
         await CommitPreviewAsync();
     }

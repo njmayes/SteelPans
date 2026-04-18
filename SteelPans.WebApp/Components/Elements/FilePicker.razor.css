@@ -49,9 +49,7 @@
     border-radius: 0 0.8rem 0.8rem 0;
     background: #fff;
     color: #475569;
-    overflow: hidden;
     white-space: nowrap;
-    text-overflow: ellipsis;
     cursor: pointer;
 }
 
@@ -74,4 +72,10 @@
 
 .file-name--placeholder {
     color: #94a3b8;
+}
+
+.file-name-text {
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

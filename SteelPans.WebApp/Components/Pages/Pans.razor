@@ -5,7 +5,7 @@
 @using SteelPans.WebApp.Extensions
 @inject IJSRuntime JS
 @inject SteelPanLoader PanLoader
-@inject MidiLoaderService MidiLoader
+@inject MidiService MidiService
 
 <div class="pans-page">
     <header class="sp-section pans-page__hero">
@@ -29,30 +29,60 @@
     {
         <section class="pans-page__top-grid">
             <MidiLoader Disabled="@isMidiPlaying_"
+                        FileName="@midiFileName_"
                         Tracks="@midiTracks_"
                         Assignments="@midiTrackAssignments_"
                         AvailablePanTypes="@availablePanTypes_"
-                        OnMidiSelected="OnMidiSelectedAsync"
-                        OnAddAssignment="AddTrackAssignmentAsync"
+                        OnSingleMidiSelected="OnSingleMidiSelectedAsync"
+                        OnMultipleMidiSelected="OnMultipleMidiSelectedAsync"
+                        OnAddTrack="AddTrackAssignmentAsync"
                         OnRemoveAssignment="RemoveTrackAssignmentAsync" />
+
+            <ModalPopup IsOpen="@showMergeMidiModal_"
+                        Title="Merge MIDI tracks"
+                        Subtitle="Enter a name for the merged track"
+                        OnClose="CloseMergeMidiModal">
+                <ChildContent>
+                    <input id="merge-midi-track-name"
+                           class="form-control"
+                           @bind="mergeMidiFileName_"
+                           @bind:event="oninput" />
+                </ChildContent>
+
+                <Actions>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            @onclick="CloseMergeMidiModal">
+                        Cancel
+                    </button>
+
+                    <button type="button"
+                            class="btn btn-primary"
+                            disabled="@string.IsNullOrWhiteSpace(mergeMidiFileName_)"
+                            @onclick="ConfirmMergeMidiAsync">
+                        Merge
+                    </button>
+                </Actions>
+            </ModalPopup>
         </section>
 
-        <section class="pans-page__midi-controls">
-            <MidiPlaybackControl CurrentTime="@playbackPosition_"
-                                 TotalTime="@playbackDuration_"
-                                 IsPlaying="@isMidiPlaying_"
-                                 CanSeek="@(activeMidiPans_.Count > 0)"
-                                 CanGoToStart="@(playbackPosition_ > TimeSpan.Zero)"
-                                 CanGoNext="@(activeMidiPans_.Count > 0 && playbackPosition_ < playbackDuration_)"
-                                 Disabled="@(activeMidiPans_.Count == 0)"
-                                 OnPlayPause="ToggleMidiAsync"
-                                 OnBackToStart="SeekToStartAsync"
-                                 OnNextTrack="HandleNextTrackAsync"
-                                 OnSeekPreviewChanged="HandleSeekPreviewChangedAsync"
-                                 OnSeekCommitted="HandleSeekCommittedAsync" />
-        </section>
+        @if (activeMidiPans_.Any(x => x.Events.Count > 0))
+        {
+            <section class="pans-page__midi-controls">
+                <MidiPlaybackControl CurrentTime="@playbackPosition_"
+                                     TotalTime="@playbackDuration_"
+                                     IsPlaying="@isMidiPlaying_"
+                                     CanGoToStart="@(playbackPosition_ > TimeSpan.Zero)"
+                                     CanGoNext="@(playbackPosition_ < playbackDuration_)"
+                                     OnPlayPause="ToggleMidiAsync"
+                                     OnBackToStart="SeekToStartAsync"
+                                     OnNextTrack="HandleNextTrackAsync"
+                                     OnSeekPreviewChanged="HandleSeekPreviewChangedAsync"
+                                     OnSeekCommitted="HandleSeekCommittedAsync" />
+            </section>
+        }
 
-        @if (activeMidiPans_.Count > 0 )
+        @if (activeMidiPans_.Count > 0)
         {
             <section class="pans-page__content">
                 <div class="pans-page__toolbar">

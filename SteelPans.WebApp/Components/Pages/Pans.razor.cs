@@ -1,9 +1,11 @@
+using Melanchall.DryWetMidi.Core;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using SteelPans.WebApp.Components.Elements;
 using SteelPans.WebApp.Model;
 using SteelPans.WebApp.Services;
+using System.Xml.Linq;
 
 namespace SteelPans.WebApp.Components.Pages;
 
@@ -15,10 +17,16 @@ public partial class Pans
     private readonly Dictionary<int, List<MidiPanEvent>> midiTrackEventsByIndex_ = [];
     private readonly Dictionary<Guid, SteelPanView> steelPanViews_ = [];
 
-    private int selectedPanIndex_;
+    private IEnumerable<PanType> AvailablePanTypes => availablePanTypes_.Where(x => !activeMidiPans_.Select(y => y.Pan.PanType).Contains(x));
+
     private string? loadError_;
 
-    private IBrowserFile? midiFile_;
+    private string midiFileName_ = string.Empty;
+
+    private bool showMergeMidiModal_;
+    private string mergeMidiFileName_ = string.Empty;
+    private IReadOnlyList<IBrowserFile> pendingMergeMidiFiles_ = [];
+
     private MidiPlaybackInfo? midiPlaybackInfo_;
     private List<MidiTrackAssignment> midiTrackAssignments_ = [];
     private List<MidiAssignedPan> activeMidiPans_ = [];
@@ -43,13 +51,7 @@ public partial class Pans
     private bool showChordBuilderPanel_;
     private bool showMetronomePanel_;
 
-    private SteelPanView? previewSteelPanView_;
     private Metronome? metronome_;
-
-    private SteelPan? SelectedPan =>
-        selectedPanIndex_ >= 0 && selectedPanIndex_ < pans_.Count
-            ? pans_[selectedPanIndex_]
-            : null;
 
     private int EffectiveMidiBpm =>
         midiBpmOverride_
@@ -69,8 +71,6 @@ public partial class Pans
                 .Where(x => x != PanType.None)
                 .Distinct()
                 .OrderBy(x => x.ToString()));
-
-            selectedPanIndex_ = 0;
         }
         catch (Exception ex)
         {
@@ -78,11 +78,10 @@ public partial class Pans
         }
     }
 
-    private async Task OnMidiSelectedAsync(IBrowserFile file)
+    private async Task OnMidiFileSelected(Func<Task<MidiFile>> getMidiFile)
     {
         await StopMidiAsync(resetPosition: true);
 
-        midiFile_ = file;
         midiTracks_.Clear();
         midiTrackAssignments_.Clear();
         midiTrackEventsByIndex_.Clear();
@@ -95,10 +94,9 @@ public partial class Pans
         playbackDuration_ = TimeSpan.Zero;
         playbackSessionStartOffset_ = TimeSpan.Zero;
 
-        await using (var playbackInfoStream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024))
-        {
-            midiPlaybackInfo_ = await MidiLoader.GetPlaybackInfoAsync(playbackInfoStream);
-        }
+        var midiFile = await getMidiFile();
+
+        midiPlaybackInfo_ = MidiService.GetPlaybackInfo(midiFile);
 
         if (midiPlaybackInfo_ is not null)
         {
@@ -107,18 +105,49 @@ public partial class Pans
             metronomeBeatUnit_ = midiPlaybackInfo_.InitialBeatUnit;
         }
 
-        await using (var trackStream = midiFile_.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024))
+        var playableTracks = MidiService.LoadPlayableTracks(midiFile);
+        foreach (var (track, events) in playableTracks)
         {
-            var playableTracks = await MidiLoader.LoadPlayableTracksAsync(trackStream);
-
-            foreach (var (track, events) in playableTracks)
-            {
-                midiTracks_.Add(track);
-                midiTrackEventsByIndex_[track.Index] = events;
-            }
+            midiTracks_.Add(track);
+            midiTrackEventsByIndex_[track.Index] = events;
         }
 
         await InvokeAsync(StateHasChanged);
+    }
+
+    private void CloseMergeMidiModal()
+    {
+        showMergeMidiModal_ = false;
+        mergeMidiFileName_ = string.Empty;
+        pendingMergeMidiFiles_ = [];
+    }
+
+    private async Task ConfirmMergeMidiAsync()
+    {
+        if (pendingMergeMidiFiles_.Count == 0)
+            return;
+
+        midiFileName_ = $"{mergeMidiFileName_.Trim()}.mid";
+        showMergeMidiModal_ = false;
+
+        await OnMidiFileSelected(() => MidiService.MergeMidiTracksAsync(midiFileName_, pendingMergeMidiFiles_));
+
+        pendingMergeMidiFiles_ = [];
+        mergeMidiFileName_ = string.Empty;
+    }
+
+    private async Task OnMultipleMidiSelectedAsync(IReadOnlyList<IBrowserFile> files)
+    {
+        pendingMergeMidiFiles_ = files;
+        showMergeMidiModal_ = true;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnSingleMidiSelectedAsync(IBrowserFile file)
+    {
+        midiFileName_ = file.Name;
+        await OnMidiFileSelected(() => MidiService.OpenMidiFileAsync(file));
     }
 
     private async Task AddTrackAssignmentAsync(MidiTrackAssignment assignment)
@@ -166,10 +195,7 @@ public partial class Pans
 
     private MidiAssignedPan? BuildAssignedPan(MidiTrackAssignment assignment)
     {
-        if (assignment.AssignedPanType is null)
-            return null;
-
-        var sourcePan = pans_.FirstOrDefault(x => x.PanType == assignment.AssignedPanType.Value);
+        var sourcePan = pans_.FirstOrDefault(x => x.PanType == assignment.AssignedPanType);
         if (sourcePan is null)
             return null;
 
@@ -182,24 +208,10 @@ public partial class Pans
             InstanceId = Guid.NewGuid(),
             TrackIndex = assignment.TrackIndex,
             TrackLabel = assignment.TrackLabel,
-            PanType = assignment.AssignedPanType.Value,
+            PanType = assignment.AssignedPanType,
             Pan = panInstance,
             Events = filteredEvents,
         };
-    }
-
-    private Task OnPanChanged(ChangeEventArgs e)
-    {
-        if (e.Value is not null && int.TryParse(e.Value.ToString(), out var selectedIndex))
-            selectedPanIndex_ = selectedIndex;
-
-        return InvokeAsync(StateHasChanged);
-    }
-
-    private Task OnPreviewSteelPanViewChanged(SteelPanView? view)
-    {
-        previewSteelPanView_ = view;
-        return Task.CompletedTask;
     }
 
     private Task RegisterAssignedSteelPanViewAsync(Guid instanceId, SteelPanView? view)
@@ -225,7 +237,7 @@ public partial class Pans
             }
         }
 
-        return previewSteelPanView_;
+        return null;
     }
 
     private async Task SelectChordAsync(HashSet<int> pitchClasses)

@@ -5,13 +5,13 @@
     overflow: auto;
     box-sizing: border-box;
     gap: clamp(0.4rem, 0.3rem + 0.3vw, 0.9rem);
-    padding-block-start: clamp(0.65rem, 0.5rem + 0.55vw, 0.9rem);
-    padding-inline: clamp(0.25rem, -0.2rem + 1.4vw, 1rem);
-    padding-block-end: clamp(0.4rem, -1.2rem + 3.2vw, 1rem);
+    padding-block-start: clamp(0.1rem, 0.35vw, 0.9rem);
+    padding-inline: clamp(0.1rem, 0.35vw, 1rem);
+    padding-block-end: clamp(0.1rem, 0.35vw, 1rem);
 }
 
 .pans-page__hero {
-    padding: min(2vw, 0.75rem) min(2.5vw, 1rem);
+    padding: clamp(0.75rem, 1vw, 1rem) clamp(0.8rem, 1vw, 1rem);
 }
 
 .pans-page__hero-content {
@@ -81,9 +81,17 @@
 
 .pans-page__content {
     position: relative;
-    flex: 1 1 0;
     min-height: 23rem;
 }
+
+.pans-page__content,
+.pans-page__pan-stage,
+.pans-page__assigned-pans,
+.pans-page__assigned-pan {
+    min-width: 0;
+    min-height: 0;
+}
+
 
 .pans-page__toolbar {
     position: absolute;
@@ -391,8 +399,7 @@
             width: 100%;
         }
 
-    .pans-page__content {
-        min-height: 0;
+    .pans-page__content {   
         overflow: visible;
     }
 

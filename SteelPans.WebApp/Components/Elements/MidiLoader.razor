@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.Components.Forms
+@using SteelPans.WebApp.Components
 @using SteelPans.WebApp.Model
 @using SteelPans.WebApp.Extensions
 
@@ -7,16 +8,65 @@
         <label class="form-label">MIDI file</label>
         <div class="midi-loader__hint">Upload a MIDI, choose a track, then add a pan for it.</div>
     </div>
+    
+    @if (Tracks.Count > 0)
+    {
+        <label class="form-label">Track</label>
+    }
 
-    <div class="midi-loader__row">
-        <div class="midi-loader__file">
-            <FilePicker OnFileSelected="OnMidiSelected"
-                        Accept="@(["mid", "midi"])" />
-        </div>
+    <div></div>
+    
+    <div class="midi-loader__file">
+        <FilePicker FileName="@FileName"
+                    OnSingleFileSelected="OnSingleMidiSelected"
+                    OnMultipleFileSelected="OnMultipleMidiSelected"
+                    Accept="@(["mid", "midi"])" />
+    </div>
 
-        @if (Tracks.Count > 0)
-        {
-            <div class="midi-loader__assign-field">
+    @if (Tracks.Count > 0)
+    {
+        <select id="midi-track-select"
+                class="form-select"
+                disabled="@(Disabled || UnassignedTracks.Count == 0)"
+                @bind="selectedTrackIndexString_">
+            @if (UnassignedTracks.Count == 0)
+            {
+                <option value="">All tracks already assigned</option>
+            }
+            else
+            {
+                @for (var i = 0; i < UnassignedTracks.Count; i++)
+                {
+                    var trackIndex = i;
+                    <option value="@trackIndex.ToString()">@GetTrackDisplay(trackIndex)</option>
+                }
+            }
+        </select>
+        <button type="button"
+                class="btn btn-primary midi-loader__add-button"
+                disabled="@(!CanOpenAddModal)"
+                @onclick="OpenPanAssignmentModal">
+            <span class="bi bi-plus-lg"></span>
+        </button>
+    }
+    else
+    {
+        <button type="button"
+                class="btn btn-primary midi-loader__add-button"
+                @onclick="OpenPanAddModal">
+            <span class="bi bi-plus-lg"></span>
+        </button>
+    }
+</div>
+
+<ModalPopup IsOpen="@(addModalType_ != AddModalType.None)"
+            Title="Add Pan"
+            Subtitle="@selectedTrackLabel_"
+            OnClose="CloseAddModal">
+    <ChildContent>
+        <div class="midi-loader-modal__body">
+            @if (addModalType_ == AddModalType.Track)
+            {
                 <select id="midi-track-select"
                         class="form-select"
                         disabled="@(Disabled || UnassignedTracks.Count == 0)"
@@ -27,85 +77,54 @@
                     }
                     else
                     {
-                        @foreach (var track in UnassignedTracks)
+                        @for (var i = 0; i < UnassignedTracks.Count; i++)
                         {
-                            <option value="@track.Index.ToString()">@GetTrackDisplay(track)</option>
+                            var trackIndex = i;
+                            <option value="@trackIndex.ToString()">@GetTrackDisplay(trackIndex)</option>
                         }
                     }
                 </select>
-            </div>
-
-            <div class="midi-loader__add-wrap">
-                <button type="button"
-                        class="btn btn-primary midi-loader__add-button"
-                        disabled="@(!CanOpenAddModal)"
-                        @onclick="OpenAddModal">
-                    <span class="bi bi-plus-lg"></span>
-                </button>
-            </div>
-        }
-    </div>
-</div>
-
-@if (showAddModal_)
-{
-    <div class="midi-loader-modal__backdrop" @onclick="CloseAddModal"></div>
-
-    <div class="midi-loader-modal" role="dialog" aria-modal="true" aria-labelledby="midi-loader-modal-title">
-        <div class="midi-loader-modal__card">
-            <div class="midi-loader-modal__header">
-                <div>
-                    <div id="midi-loader-modal-title" class="midi-loader-modal__title">Add pan</div>
-                    <div class="midi-loader-modal__subtitle">@selectedTrackLabel_</div>
-                </div>
-
-                <button type="button"
-                        class="btn-close"
-                        aria-label="Close"
-                        @onclick="CloseAddModal">
-                </button>
-            </div>
-
-            <div class="midi-loader-modal__body">
-                <label class="form-label" for="pan-type-select">Pan</label>
-                <select id="pan-type-select"
-                        class="form-select"
-                        @bind="selectedPanTypeString_">
-                    @if (AvailablePanTypesForSelectedTrack.Count == 0)
+            }
+            <select id="pan-type-select"
+                    class="form-select"
+                    @bind="selectedPanTypeString_">
+                @if (AvailablePanTypes.Count == 0)
+                {
+                    <option value="">No pans available</option>
+                }
+                else
+                {
+                    @foreach (var panType in AvailablePanTypes)
                     {
-                        <option value="">No pans available</option>
+                        <option value="@panType.ToString()">@panType.ToSpacedPascal()</option>
                     }
-                    else
-                    {
-                        @foreach (var panType in AvailablePanTypesForSelectedTrack)
-                        {
-                            <option value="@panType.ToString()">@panType.ToSpacedPascal()</option>
-                        }
-                    }
-                </select>
-            </div>
-
-            <div class="midi-loader-modal__actions">
-                <button type="button"
-                        class="btn btn-outline-secondary"
-                        @onclick="CloseAddModal">
-                    Cancel
-                </button>
-
-                <button type="button"
-                        class="btn btn-primary"
-                        disabled="@(!CanConfirmAdd)"
-                        @onclick="ConfirmAddAsync">
-                    Add
-                </button>
-            </div>
+                }
+            </select>
         </div>
-    </div>
-}
+    </ChildContent>
+
+    <Actions>
+        <button type="button"
+                class="btn btn-outline-secondary"
+                @onclick="CloseAddModal">
+            Cancel
+        </button>
+
+        <button type="button"
+                class="btn btn-primary"
+                disabled="@(!CanConfirmAdd)"
+                @onclick="ConfirmAddAsync">
+            Add
+        </button>
+    </Actions>
+</ModalPopup>
 
 @code {
     [Parameter]
     public bool Disabled { get; set; }
+
+    [Parameter]
+    public string FileName { get; set; } = string.Empty;
 
     [Parameter]
     public IReadOnlyList<MidiTrackInfo> Tracks { get; set; } = [];
@@ -117,18 +136,38 @@
     public IReadOnlyList<PanType> AvailablePanTypes { get; set; } = [];
 
     [Parameter]
-    public EventCallback<IBrowserFile> OnMidiSelected { get; set; }
+    public EventCallback<IBrowserFile> OnSingleMidiSelected { get; set; }
 
     [Parameter]
-    public EventCallback<MidiTrackAssignment> OnAddAssignment { get; set; }
+    public EventCallback<IReadOnlyList<IBrowserFile>> OnMultipleMidiSelected { get; set; }
+
+    [Parameter]
+    public EventCallback<MidiTrackAssignment> OnAddTrack { get; set; }
 
     [Parameter]
     public EventCallback<int> OnRemoveAssignment { get; set; }
 
+    private enum AddModalType
+    {
+        None,
+        Pan,
+        Track
+    }
+
+    private AddModalType addModalType_;
+
     private string? selectedTrackIndexString_;
     private string? selectedPanTypeString_;
-    private bool showAddModal_;
-    private string selectedTrackLabel_ = string.Empty;
+    private string selectedTrackLabel_
+    {
+        get
+        {
+            if (!int.TryParse(selectedTrackIndexString_, out var trackIndex))
+                return "Invalid Track";
+
+            return GetTrackDisplay(trackIndex);
+        }
+    }
 
     private List<MidiTrackInfo> UnassignedTracks =>
         Tracks
@@ -141,27 +180,16 @@
         UnassignedTracks.Count > 0 &&
         int.TryParse(selectedTrackIndexString_, out _);
 
-    private bool CanConfirmAdd =>
+    private bool CanConfirmAddTrack => addModalType_ == AddModalType.Track &&
         int.TryParse(selectedTrackIndexString_, out _) &&
         Enum.TryParse<PanType>(selectedPanTypeString_, out var panType) &&
-        AvailablePanTypesForSelectedTrack.Contains(panType);
+        AvailablePanTypes.Contains(panType);
 
-    private List<PanType> AvailablePanTypesForSelectedTrack
-    {
-        get
-        {
-            if (!int.TryParse(selectedTrackIndexString_, out var trackIndex))
-                return [];
+    private bool CanConfirmAddPan => addModalType_ == AddModalType.Pan &&
+        Enum.TryParse<PanType>(selectedPanTypeString_, out var panType) &&
+        AvailablePanTypes.Contains(panType);
 
-            var assignedPanTypes = Assignments
-                .Select(a => a.AssignedPanType)
-                .ToHashSet();
-
-            return AvailablePanTypes
-                .Where(p => !assignedPanTypes.Contains(p))
-                .ToList();
-        }
-    }
+    private bool CanConfirmAdd => CanConfirmAddPan || CanConfirmAddTrack;
 
     protected override void OnParametersSet()
     {
@@ -178,16 +206,26 @@
         }
     }
 
-    private static string GetTrackDisplay(MidiTrackInfo track)
+    private string GetTrackDisplay(int trackIndex)
     {
-        var baseName = string.IsNullOrWhiteSpace(track.Name)
-            ? $"Track {track.Index + 1}"
-            : $"Track {track.Index + 1} — {track.Name}";
+        var track = Tracks.First(x => x.Index == trackIndex);
 
-        return $"{baseName} ({track.NoteCount} notes)";
+        var baseName = string.IsNullOrWhiteSpace(track?.Name)
+            ? $"Track {trackIndex + 1}"
+            : track.Name;
+
+        var noteCount = !string.IsNullOrWhiteSpace(track?.Name) ? $" ({track.NoteCount} notes)" : string.Empty;
+
+        return $"{baseName}{noteCount}";
     }
 
-    private void OpenAddModal()
+    private void OpenPanAddModal()
+    {
+        addModalType_ = AddModalType.Pan;
+        selectedPanTypeString_ = AvailablePanTypes.FirstOrDefault().ToString();
+    }
+
+    private void OpenPanAssignmentModal()
     {
         if (!int.TryParse(selectedTrackIndexString_, out var trackIndex))
             return;
@@ -196,23 +234,31 @@
         if (track is null)
             return;
 
-        selectedTrackLabel_ = GetTrackDisplay(track);
-        selectedPanTypeString_ = AvailablePanTypesForSelectedTrack.FirstOrDefault().ToString();
-        showAddModal_ = true;
+        addModalType_ = AddModalType.Track;
+        selectedPanTypeString_ = AvailablePanTypes.FirstOrDefault().ToString();
     }
 
     private void CloseAddModal()
     {
-        showAddModal_ = false;
+        addModalType_ = AddModalType.None;
         selectedPanTypeString_ = null;
     }
 
-    private async Task ConfirmAddAsync()
+    private async Task ConfirmAddPanAsync(PanType panType)
+    {
+        var assignment = new MidiTrackAssignment
+        {
+            TrackIndex = -1,
+            TrackLabel = string.Empty,
+            AssignedPanType = panType,
+        };
+
+        await OnAddTrack.InvokeAsync(assignment);
+    }
+
+    private async Task ConfirmAddTrackAsync(PanType panType)
     {
         if (!int.TryParse(selectedTrackIndexString_, out var trackIndex))
-            return;
-
-        if (!Enum.TryParse<PanType>(selectedPanTypeString_, out var panType))
             return;
 
         var track = Tracks.FirstOrDefault(x => x.Index == trackIndex);
@@ -222,11 +268,31 @@
         var assignment = new MidiTrackAssignment
         {
             TrackIndex = track.Index,
-            TrackLabel = GetTrackDisplay(track),
+            TrackLabel = GetTrackDisplay(trackIndex),
             AssignedPanType = panType,
         };
 
-        await OnAddAssignment.InvokeAsync(assignment);
+        await OnAddTrack.InvokeAsync(assignment);
+    }
+
+    private async Task ConfirmAddAsync()
+    {
+        if (!Enum.TryParse<PanType>(selectedPanTypeString_, out var panType))
+            return;
+
+        switch (addModalType_)
+        {
+            case AddModalType.None:
+                break;
+            case AddModalType.Pan:
+                await ConfirmAddPanAsync(panType);
+                break;
+            case AddModalType.Track:
+                await ConfirmAddTrackAsync(panType);
+                break;
+
+        }
+
         CloseAddModal();
     }
 

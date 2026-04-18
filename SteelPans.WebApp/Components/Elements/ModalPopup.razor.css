@@ -1,0 +1,54 @@
+﻿.modal-popup__backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1040;
+}
+
+.modal-popup {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 1050;
+    pointer-events: none;
+}
+
+.modal-popup__card {
+    width: min(100%, 20rem);
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 1rem;
+    box-shadow: 0 1.5rem 3rem rgba(15, 23, 42, 0.2);
+    pointer-events: auto;
+}
+
+.modal-popup__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem 0.75rem;
+}
+
+.modal-popup__title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #0f172a;
+}
+
+.modal-popup__subtitle {
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.modal-popup__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 0 1rem 1rem;
+}

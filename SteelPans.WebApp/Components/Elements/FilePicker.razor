@@ -1,6 +1,7 @@
 ﻿<div class="file-picker">
     <InputFile id="file"
                class="file-input"
+               multiple
                OnChange="OnFileSelectedAsync"
                accept="@filter_" />
 
@@ -9,20 +10,25 @@
     </label>
 
     <label for="file"
-           class="file-name @(string.IsNullOrWhiteSpace(fileName_) ? "file-name--placeholder" : null)">
-        @displayFileName_
+           class="file-name @(string.IsNullOrWhiteSpace(FileName) ? "file-name--placeholder" : null)">
+        <span class="file-name-text">@displayFileName_</span>
     </label>
 </div>
 
 @code {
     [Parameter]
-    public EventCallback<IBrowserFile> OnFileSelected { get; set; }
+    public string FileName { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<IBrowserFile> OnSingleFileSelected { get; set; }
+
+    [Parameter]
+    public EventCallback<IReadOnlyList<IBrowserFile>> OnMultipleFileSelected { get; set; }
 
     [Parameter]
     public List<string> Accept { get; set; } = new();
 
-    private string fileName_ = string.Empty;
-    private string displayFileName_ => string.IsNullOrWhiteSpace(fileName_) ? "No file selected" : fileName_;
+    private string displayFileName_ => string.IsNullOrWhiteSpace(FileName) ? "No file selected" : FileName;
 
     private string filter_ => string.Join(",", Accept.Select(ext => $".{ext.TrimStart('.')}"));
 
@@ -31,12 +37,12 @@
         if (e.FileCount == 0)
             return;
 
-        var file = e.File;
-        if (file != null)
-            fileName_ = file.Name;
-        else
-            fileName_ = string.Empty;
+        if (e.FileCount == 1)
+        {
+            await OnSingleFileSelected.InvokeAsync(e.File);
+            return;
+        }
 
-        await OnFileSelected.InvokeAsync(file);
+        await OnMultipleFileSelected.InvokeAsync(e.GetMultipleFiles(32));
     }
 }

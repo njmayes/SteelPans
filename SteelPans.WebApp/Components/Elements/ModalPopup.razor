@@ -1,0 +1,42 @@
+﻿@if (IsOpen)
+{
+    <div class="@BackdropClass" @onclick="OnBackdropClickedAsync"></div>
+
+    <div class="@ModalClass"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="@TitleId">
+        <div class="@CardClass">
+            <div class="@HeaderClass">
+                <div>
+                    <div id="@TitleId" class="@TitleClass">@Title</div>
+
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <div class="@SubtitleClass">@Subtitle</div>
+                    }
+                </div>
+
+                @if (ShowCloseButton)
+                {
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Close"
+                            @onclick="CloseAsync">
+                    </button>
+                }
+            </div>
+
+            <div class="@BodyClass">
+                @ChildContent
+            </div>
+
+            @if (Actions is not null)
+            {
+                <div class="@ActionsClass">
+                    @Actions
+                </div>
+            }
+        </div>
+    </div>
+}

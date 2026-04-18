@@ -1,10 +1,25 @@
 .midi-loader {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
+    display: grid;
+    grid-template-columns: minmax(18rem, 1.35fr) auto;
+    gap: clamp(0.1rem, 0.5vw, 0.25rem);
     width: 100%;
-    padding: 0.85rem 0.95rem;
+    padding: clamp(0.5rem, 1vw, 0.5rem) clamp(0.65rem, 1vw, 0.95rem);
 }
+
+    .midi-loader:has(> :nth-child(5)) {
+        grid-template-columns: minmax(0, 1.5fr) minmax(max-content, 1fr) auto;
+    }
+
+    .midi-loader .form-label {
+        margin: 0;
+        padding-left: 0.3rem;
+        font-size: clamp(0.6rem, 2vw, 0.88rem);
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #334155;
+        text-wrap: nowrap;
+    }
 
 .midi-loader--disabled {
     opacity: 0.75;
@@ -18,26 +33,10 @@
     gap: 1rem;
 }
 
-    .midi-loader__top .form-label {
-        margin: 0;
-        font-size: 0.88rem;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: #334155;
-    }
-
 .midi-loader__hint {
-    font-size: 0.78rem;
+    font-size: clamp(0.6rem, 1.6vw, 0.78rem);
     color: #334155;
-}
-
-.midi-loader__row {
-    display: grid;
-    grid-template-columns: minmax(18rem, 1.35fr) minmax(16rem, 1fr) auto;
-    gap: 0.7rem;
-    align-items: end;
-    width: 100%;
+    transition: opacity 100ms ease, font-size 100ms ease;
 }
 
 .midi-loader__file {
@@ -49,138 +48,57 @@
         width: 100%;
     }
 
-.midi-loader__assign-field,
 .midi-loader__add-wrap {
     display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+    flex-direction: row;
+    gap: min(0.75rem, 1.2vw);
+    justify-content: center;
+    align-items: center;
     min-width: 0;
 }
 
-    .midi-loader__assign-field .form-select {
-        border-radius: 0.8rem;
-    }
+.midi-loader .form-select {
+    font-size: clamp(0.6rem, 1vw, 1rem);
+    padding: 0 2rem 0 min(0.875rem, 2.5vw);
+    border-radius: 0.8rem;
+}
+
+.midi-loader .form-select,
+.midi-loader__add-button {
+    box-sizing: border-box;
+    height: clamp(1.4rem, 3.2vw, 2.4rem);
+    line-height: 1;
+    border-width: 1px;
+}
+
+.midi_loader__add_wrap {
+    width: clamp(1.4rem, 3.2vw, 2.4rem);
+}
 
 .midi-loader__add-button {
-    width: calc(1.5em + 0.75rem + 2px);
-    height: calc(1.5em + 0.75rem + 2px);
+    width: clamp(1.4rem, 3.2vw, 2.4rem);
+    padding: 0;
     display: flex;
-    justify-content: center;
     align-items: center;
-    place-items: center;
-}
-
-.midi-loader-modal__backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1040;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(2px);
-}
-
-.midi-loader-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 1050;
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-}
-
-.midi-loader-modal__card {
-    width: min(100%, 28rem);
-    background: #ffffff;
-    border-radius: 1rem;
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28), 0 8px 24px rgba(15, 23, 42, 0.12);
-    overflow: hidden;
-}
-
-.midi-loader-modal__header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem 1rem 0.75rem;
-}
-
-.midi-loader-modal__title {
-    font-size: 1rem;
-    font-weight: 800;
-    color: #0f172a;
-    line-height: 1.2;
-}
-
-.midi-loader-modal__subtitle {
-    margin-top: 0.2rem;
-    font-size: 0.84rem;
-    color: #64748b;
+    justify-content: center;
 }
 
 .midi-loader-modal__body {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.4rem;
     padding: 0 1rem 1rem;
 }
 
-    .midi-loader-modal__body .form-label {
-        margin: 0;
-        font-size: 0.82rem;
-        font-weight: 700;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-        color: #475569;
-    }
-
-.midi-loader-modal__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.6rem;
-    padding: 0 1rem 1rem;
-}
-
-    .midi-loader-modal__actions .btn {
-        min-width: 6rem;
-    }
-
-@media (max-width: 900px) {
-    .midi-loader__row {
-        grid-template-columns: 1fr;
-        align-items: stretch;
-    }
-
-    .midi-loader__add-button {
-        width: 100%;
+@media (max-width: 700px ) {
+    .midi-loader__hint {
+        font-size: 0;
+        opacity: 0;
     }
 }
 
 @media (max-width: 520px) {
-    .midi-loader {
-        padding: 0.75rem;
-    }
-
-    .midi-loader-modal {
-        padding: 0.6rem;
-    }
-
-    .midi-loader-modal__card {
-        width: 100%;
-        border-radius: 0.85rem;
-    }
-
-    .midi-loader-modal__header,
-    .midi-loader-modal__body,
-    .midi-loader-modal__actions {
-        padding-left: 0.85rem;
-        padding-right: 0.85rem;
-    }
-
     .midi-loader-modal__actions {
         flex-direction: column-reverse;
     }
-
-        .midi-loader-modal__actions .btn {
-            width: 100%;
-        }
 }

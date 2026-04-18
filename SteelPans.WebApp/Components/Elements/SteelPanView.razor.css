@@ -10,8 +10,8 @@
     justify-content: center;
     align-items: center;
     width: 100%;
-    height: clamp(50vh, calc(100dvh - 17rem), 100vh);
-    max-height: clamp(50vh, calc(100dvh - 17rem), 100vh);
+    height: clamp(64vh, calc(100dvh - 4rem), 69vh);
+    max-height: clamp(64vh, calc(100dvh - 4rem), 69vh);
 }
 
 .steel-pan {

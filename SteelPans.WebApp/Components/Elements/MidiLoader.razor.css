@@ -1,13 +1,14 @@
 .midi-loader {
     display: grid;
-    grid-template-columns: minmax(18rem, 1.35fr) auto;
+    grid-template-columns: 1fr;
     gap: clamp(0.1rem, 0.5vw, 0.25rem);
     width: 100%;
-    padding: clamp(0.5rem, 1vw, 0.5rem) clamp(0.65rem, 1vw, 0.95rem);
+    padding: 0.5rem clamp(0.65rem, 1vw, 0.95rem);
+    transition: grid-template-columns 180ms ease;
 }
 
-    .midi-loader:has(> :nth-child(5)) {
-        grid-template-columns: minmax(0, 1.5fr) minmax(max-content, 1fr) auto;
+    .midi-loader > * {
+        min-width: 0;
     }
 
     .midi-loader .form-label {
@@ -18,7 +19,7 @@
         letter-spacing: 0.04em;
         text-transform: uppercase;
         color: #334155;
-        text-wrap: nowrap;
+        white-space: nowrap;
     }
 
 .midi-loader--disabled {
@@ -29,68 +30,151 @@
     display: flex;
     flex-direction: row;
     align-items: flex-end;
-    padding-left: 0.15rem;
     gap: 1rem;
+    padding-left: 0.15rem;
 }
 
 .midi-loader__hint {
     font-size: clamp(0.6rem, 1.6vw, 0.78rem);
     color: #334155;
-    transition: opacity 100ms ease, font-size 100ms ease;
+    transition: opacity 120ms ease, font-size 120ms ease;
+}
+
+.midi-loader__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    align-items: stretch;
+    min-width: 0;
+}
+
+.midi-loader__row--with-menu {
+    grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .midi-loader__file {
     min-width: 0;
 }
 
-    .midi-loader__file:only-child {
-        grid-column: 1 / -1;
-        width: 100%;
+.midi-loader__menu-wrap {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+}
+
+.midi-loader__menu-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.7rem;
+    height: 100%;
+    padding: 0 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.8rem;
+    background: #fff;
+    color: #334155;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+    .midi-loader__menu-button:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+        box-shadow: 0 0.45rem 1rem rgba(15, 23, 42, 0.08);
     }
 
-.midi-loader__add-wrap {
-    display: flex;
-    flex-direction: row;
-    gap: min(0.75rem, 1.2vw);
-    justify-content: center;
-    align-items: center;
-    min-width: 0;
-}
+    .midi-loader__menu-button .bi {
+        font-size: 1.05rem;
+        line-height: 1;
+    }
 
-.midi-loader .form-select {
-    font-size: clamp(0.6rem, 1vw, 1rem);
-    padding: 0 2rem 0 min(0.875rem, 2.5vw);
-    border-radius: 0.8rem;
-}
-
-.midi-loader .form-select,
-.midi-loader__add-button {
-    box-sizing: border-box;
-    height: clamp(1.4rem, 3.2vw, 2.4rem);
-    line-height: 1;
-    border-width: 1px;
-}
-
-.midi_loader__add_wrap {
-    width: clamp(1.4rem, 3.2vw, 2.4rem);
-}
-
-.midi-loader__add-button {
-    width: clamp(1.4rem, 3.2vw, 2.4rem);
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.midi-loader-modal__body {
+.midi-loader__track-overlay {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    right: 0;
+    width: min(22rem, 80vw);
+    max-height: 16rem;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    padding: 0 1rem 1rem;
+    overflow: hidden;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.95rem;
+    background: #ffffff;
+    box-shadow: 0 1rem 2rem rgba(15, 23, 42, 0.18);
+    z-index: 20;
 }
 
-@media (max-width: 700px ) {
+.midi-loader__track-overlay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.8rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.midi-loader__track-overlay-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #334155;
+}
+
+.midi-loader__track-overlay-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0;
+    border: none;
+    border-radius: 0.6rem;
+    background: transparent;
+    color: #475569;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+    .midi-loader__track-overlay-close:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+
+.midi-loader__track-list {
+    overflow: auto;
+    padding: 0.35rem;
+}
+
+.midi-loader__track-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.7rem;
+}
+
+    .midi-loader__track-item:hover {
+        background: #f8fafc;
+    }
+
+.midi-loader__track-name {
+    min-width: 0;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 0.92rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.midi-loader__track-meta {
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+@media (max-width: 700px) {
     .midi-loader__hint {
         font-size: 0;
         opacity: 0;
@@ -98,6 +182,11 @@
 }
 
 @media (max-width: 520px) {
+    .midi-loader__track-overlay {
+        width: min(18rem, 88vw);
+        max-height: 14rem;
+    }
+
     .midi-loader-modal__actions {
         flex-direction: column-reverse;
     }

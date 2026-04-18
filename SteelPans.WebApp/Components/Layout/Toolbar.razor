@@ -1,0 +1,183 @@
+﻿@implements IDisposable
+
+<CascadingValue Value="this" IsFixed="true">
+    @ChildContent
+</CascadingValue>
+
+<div class="toolbar @(SideClass) @(ActiveElement is not null ? "toolbar--panel-open" : null)">
+    @if (ActiveElement is null)
+    {
+        <div class="toolbar__menu-wrap @(menuOpen_ ? "toolbar__menu-wrap--open" : null)">
+            <button class="toolbar__menu-button"
+                    type="button"
+                    aria-label="@MenuButtonLabel"
+                    aria-expanded="@menuOpen_"
+                    @onclick="ToggleMenu">
+                <span class="bi @(menuOpen_? OpenIconClass : ClosedIconClass)" aria-hidden="true"></span>
+            </button>
+
+            @if (menuOpen_ && elements_.Count > 0)
+            {
+                <div class="toolbar__menu" role="menu" aria-label="@MenuAriaLabel">
+                    @for (var i = 0; i < elements_.Count; i++)
+                    {
+                        var index = i;
+                        var element = elements_[index];
+
+                        <button class="toolbar__menu-item"
+                                type="button"
+                                role="menuitem"
+                                @onclick="() => ActivateElementAsync(index)">
+                            <span>@element.Title</span>
+                            @if (!string.IsNullOrWhiteSpace(element.IconClass))
+                            {
+                                <span class="@element.IconClass" aria-hidden="true"></span>
+                            }
+
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="toolbar__panel">
+            <div class="toolbar__panel-header">
+                <div class="toolbar__panel-title-wrap">
+                    @if (!string.IsNullOrWhiteSpace(ActiveElement.IconClass))
+                    {
+                        <span class="@ActiveElement.IconClass toolbar__panel-icon" aria-hidden="true"></span>
+                    }
+
+                    <span class="toolbar__panel-title">@ActiveElement.Title</span>
+                </div>
+
+                <div class="toolbar__panel-header-actions">
+                    @if (ActiveElement.HeaderActions is not null)
+                    {
+                        @ActiveElement.HeaderActions
+                    }
+
+                    <button class="toolbar__panel-close"
+                            type="button"
+                            aria-label="@($"Close {ActiveElement.Title}")"
+                            @onclick="CloseActive">
+                        <span class="bi bi-x-lg" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="toolbar__panel-body">
+                @ActiveElement.ChildContent
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    public enum ToolbarSide
+    {
+        Left,
+        Right
+    }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public int InitialActiveIndex { get; set; } = -1;
+
+    [Parameter]
+    public string MenuButtonLabel { get; set; } = "Open menu";
+
+    [Parameter]
+    public string MenuAriaLabel { get; set; } = "Menu";
+
+    [Parameter]
+    public string ClosedIconClass { get; set; } = "bi-list";
+
+    [Parameter]
+    public string OpenIconClass { get; set; } = "bi-x-lg";
+
+    [Parameter]
+    public bool CloseOnAction { get; set; } = true;
+
+    [Parameter]
+    public ToolbarSide Side { get; set; } = ToolbarSide.Left;
+
+    private readonly List<ToolbarElement> elements_ = [];
+    private int activeIndex_ = -1;
+    private bool menuOpen_;
+
+    private string SideClass => Side == ToolbarSide.Right
+        ? "toolbar--right"
+        : "toolbar--left";
+
+    internal void RegisterElement(ToolbarElement element)
+    {
+        elements_.Add(element);
+
+        if (activeIndex_ < 0 && InitialActiveIndex >= 0 && InitialActiveIndex < elements_.Count)
+            activeIndex_ = InitialActiveIndex;
+
+        StateHasChanged();
+    }
+
+    internal void UnregisterElement(ToolbarElement element)
+    {
+        var index = elements_.IndexOf(element);
+        if (index < 0)
+            return;
+
+        elements_.RemoveAt(index);
+
+        if (activeIndex_ == index)
+            activeIndex_ = -1;
+        else if (activeIndex_ > index)
+            activeIndex_--;
+
+        StateHasChanged();
+    }
+
+    private ToolbarElement? ActiveElement =>
+        activeIndex_ >= 0 && activeIndex_ < elements_.Count
+            ? elements_[activeIndex_]
+            : null;
+
+    private void ToggleMenu()
+    {
+        menuOpen_ = !menuOpen_;
+    }
+
+    private async Task ActivateElementAsync(int index)
+    {
+        if (index < 0 || index >= elements_.Count)
+            return;
+
+        var element = elements_[index];
+
+        if (element.HasBody)
+        {
+            activeIndex_ = index;
+            menuOpen_ = false;
+            return;
+        }
+
+        if (element.OnClick.HasDelegate)
+            await element.OnClick.InvokeAsync();
+
+        if (CloseOnAction)
+            menuOpen_ = false;
+    }
+
+    private void CloseActive()
+    {
+        activeIndex_ = -1;
+    }
+
+    public void Dispose()
+    {
+        elements_.Clear();
+    }
+}

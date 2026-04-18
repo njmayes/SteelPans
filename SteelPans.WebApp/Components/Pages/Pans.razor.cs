@@ -17,7 +17,7 @@ public partial class Pans
     private readonly Dictionary<int, List<MidiPanEvent>> midiTrackEventsByIndex_ = [];
     private readonly Dictionary<Guid, SteelPanView> steelPanViews_ = [];
 
-    private IEnumerable<PanType> AvailablePanTypes => availablePanTypes_.Where(x => !activeMidiPans_.Select(y => y.Pan.PanType).Contains(x));
+    private IReadOnlyList<PanType> AvailablePanTypes => availablePanTypes_.Where(x => !activeMidiPans_.Select(y => y.Pan.PanType).Contains(x)).ToList();
 
     private string? loadError_;
 
@@ -47,11 +47,8 @@ public partial class Pans
     private TimeSpan playbackDuration_;
     private TimeSpan playbackSessionStartOffset_ = TimeSpan.Zero;
 
-    private bool showToolsMenu_;
-    private bool showChordBuilderPanel_;
-    private bool showMetronomePanel_;
-
     private Metronome? metronome_;
+    private AddPanModal? addPanModal_;
 
     private int EffectiveMidiBpm =>
         midiBpmOverride_
@@ -152,8 +149,6 @@ public partial class Pans
 
     private async Task AddTrackAssignmentAsync(MidiTrackAssignment assignment)
     {
-        await StopMidiAsync(resetPosition: true);
-
         midiTrackAssignments_.RemoveAll(x => x.TrackIndex == assignment.TrackIndex);
         activeMidiPans_.RemoveAll(x => x.TrackIndex == assignment.TrackIndex);
 
@@ -173,9 +168,10 @@ public partial class Pans
 
     private async Task RemoveTrackAssignmentAsync(int trackIndex)
     {
-        await StopMidiAsync(resetPosition: true);
-
         midiTrackAssignments_.RemoveAll(x => x.TrackIndex == trackIndex);
+
+        if (!midiTrackAssignments_.Any())
+            await StopMidiAsync();
 
         var removedPans = activeMidiPans_
             .Where(x => x.TrackIndex == trackIndex)
@@ -213,17 +209,26 @@ public partial class Pans
             Events = filteredEvents,
         };
     }
-
-    private Task RegisterAssignedSteelPanViewAsync(Guid instanceId, SteelPanView? view)
+    private async Task RegisterAssignedSteelPanViewAsync(Guid instanceId, SteelPanView? view)
     {
         if (view is null)
         {
             steelPanViews_.Remove(instanceId);
-            return Task.CompletedTask;
+            return;
         }
 
         steelPanViews_[instanceId] = view;
-        return Task.CompletedTask;
+
+        var assignedPan = activeMidiPans_.FirstOrDefault(x => x.InstanceId == instanceId);
+        if (assignedPan is not null)
+            await JS.InvokeVoidAsync("steelPan.setComponentVolume", view.ComponentId, assignedPan.Volume);
+    }
+
+    private async Task OnPanVolumeChangedAsync(MidiAssignedPan activePan, double volume)
+    {
+        activePan.Volume = Math.Clamp(volume, 0.0, 1.0);
+        if (steelPanViews_.TryGetValue(activePan.InstanceId, out var view))
+            await JS.InvokeVoidAsync("steelPan.setComponentVolume", view.ComponentId, activePan.Volume);
     }
 
     private SteelPanView? GetInteractiveSteelPanView()
@@ -256,36 +261,6 @@ public partial class Pans
             return;
 
         await view.PlaySelectedNotesAsync();
-    }
-
-    private async Task ToggleToolsMenu()
-    {
-        showToolsMenu_ = !showToolsMenu_;
-        await Task.CompletedTask;
-    }
-
-    private void OpenChordBuilderPanel()
-    {
-        showToolsMenu_ = false;
-        showChordBuilderPanel_ = true;
-        showMetronomePanel_ = false;
-    }
-
-    private void OpenMetronomePanel()
-    {
-        showToolsMenu_ = false;
-        showMetronomePanel_ = true;
-        showChordBuilderPanel_ = false;
-    }
-
-    private void CloseChordBuilderPanel()
-    {
-        showChordBuilderPanel_ = false;
-    }
-
-    private void CloseMetronomePanel()
-    {
-        showMetronomePanel_ = false;
     }
 
     private async Task ToggleMidiAsync()
@@ -377,21 +352,6 @@ public partial class Pans
         }
         catch (OperationCanceledException)
         {
-        }
-        finally
-        {
-            if (!midiPlaybackCts_.IsCancellationRequested)
-            {
-                isMidiPlaying_ = false;
-                midiStartAt_ = null;
-                playbackPosition_ = playbackDuration_;
-                playbackSessionStartOffset_ = playbackDuration_;
-
-                if (metronome_ is not null)
-                    await metronome_.StopAsync();
-
-                await InvokeAsync(StateHasChanged);
-            }
         }
     }
 

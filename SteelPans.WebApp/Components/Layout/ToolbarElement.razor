@@ -1,0 +1,33 @@
+﻿@implements IDisposable
+
+@code {
+    [CascadingParameter]
+    public Toolbar? Parent { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? IconClass { get; set; }
+
+    [Parameter]
+    public RenderFragment? HeaderActions { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+
+    internal bool HasBody => ChildContent is not null;
+
+    protected override void OnInitialized()
+    {
+        Parent?.RegisterElement(this);
+    }
+
+    public void Dispose()
+    {
+        Parent?.UnregisterElement(this);
+    }
+}

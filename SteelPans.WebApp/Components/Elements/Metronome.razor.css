@@ -52,14 +52,12 @@
     border: 1px solid rgba(191, 219, 254, 0.42);
     background: linear-gradient(180deg, #3b82f6 0%, #2563eb 52%, #1d4ed8 100%);
     color: #eff6ff;
-    box-shadow: 0 0.5rem 1.25rem rgba(29, 78, 216, 0.38), 0 0 0 0.16rem rgba(15, 23, 42, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     transition: transform 160ms ease, filter 160ms ease, background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
     .metronome__toggle:hover:not(:disabled) {
         transform: translateY(-1px) scale(1.03);
         filter: brightness(1.08);
-        box-shadow: 0 0.7rem 1.5rem rgba(29, 78, 216, 0.46), 0 0 0 0.18rem rgba(15, 23, 42, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.26);
     }
 
     .metronome__toggle:active:not(:disabled) {
@@ -69,7 +67,6 @@
 
     .metronome__toggle:focus-visible {
         outline: none;
-        box-shadow: 0 0.5rem 1.25rem rgba(29, 78, 216, 0.38), 0 0 0 0.16rem rgba(15, 23, 42, 0.32), 0 0 0 0.34rem rgba(59, 130, 246, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
 
     .metronome__toggle:disabled {
@@ -105,7 +102,6 @@
     border: 1px solid rgba(191, 219, 254, 0.42);
     background: linear-gradient(180deg, #3b82f6 0%, #2563eb 52%, #1d4ed8 100%);
     color: #eff6ff;
-    box-shadow: 0 0.5rem 1.25rem rgba(29, 78, 216, 0.38), 0 0 0 0.16rem rgba(15, 23, 42, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(6px);
 }
 

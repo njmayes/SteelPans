@@ -25,7 +25,7 @@ else
 }
 
 @code {
-    private bool notesPreloaded_;
+    public string ComponentId => componentId_;
 
     [Parameter, EditorRequired]
     public SteelPan? Pan { get; set; }
@@ -38,7 +38,8 @@ else
 
     [Parameter]
     public EventCallback<SteelPanView?> InstanceChanged { get; set; }
-
+    
+    private bool notesPreloaded_;
     private readonly string componentId_ = $"steelpan_{Guid.NewGuid():N}";
     private DotNetObjectReference<SteelPanView>? selfRef_;
     private string panSvg_ = string.Empty;
@@ -145,7 +146,7 @@ else
         var cts = new CancellationTokenSource();
         playSelectedCts_ = cts;
 
-        await JS.InvokeVoidAsync("steelPan.playNotes", (object)selectedNoteKeys);
+        await JS.InvokeVoidAsync("steelPan.playNotes", componentId_, (object)selectedNoteKeys);
         await JS.InvokeVoidAsync(
             "steelPan.flashNotes",
             componentId_,

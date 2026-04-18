@@ -2,6 +2,8 @@ window.steelPan = {
     _refs: {},
     _audioBuffers: {},
     _audioContext: null,
+    _gainByComponent: {},
+    _volumeByComponent: {},
     _scheduledSourcesByComponent: {},
     _scheduledSourcesByNoteByComponent: {},
     _scheduledVisualTimersByComponent: {},
@@ -15,8 +17,63 @@ window.steelPan = {
     unregister: function (id) {
         delete this._refs[id];
         delete this._panElements[id];
+        delete this._volumeByComponent[id];
+
+        const gain = this._gainByComponent[id];
+        if (gain) {
+            try {
+                gain.disconnect();
+            } catch { }
+            delete this._gainByComponent[id];
+        }
+
         this.stopMidiSchedule(id);
         this.clearPlayingVisuals(id);
+    },
+
+    _ensureAudioContext: async function () {
+        if (!this._audioContext) {
+            const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+            this._audioContext = new AudioContextCtor();
+        }
+
+        if (this._audioContext.state === "suspended")
+            await this._audioContext.resume();
+
+        return this._audioContext;
+    },
+
+    _getOrCreateComponentGain: async function (componentId) {
+        const audioContext = await this._ensureAudioContext();
+
+        let gain = this._gainByComponent[componentId];
+        if (!gain) {
+            gain = audioContext.createGain();
+            gain.gain.value = this._volumeByComponent[componentId] ?? 1.0;
+            gain.connect(audioContext.destination);
+            this._gainByComponent[componentId] = gain;
+        }
+
+        return gain;
+    },
+
+    setComponentVolume: async function (componentId, volume) {
+        if (!componentId)
+            return;
+
+        const numericVolume = Number(volume);
+        const clampedVolume = Number.isFinite(numericVolume)
+            ? Math.max(0, Math.min(1, numericVolume))
+            : 1.0;
+
+        this._volumeByComponent[componentId] = clampedVolume;
+
+        const gain = await this._getOrCreateComponentGain(componentId);
+        const now = this._audioContext.currentTime;
+
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(clampedVolume, now + 0.03);
     },
 
     bindPanElements: function (componentId) {
@@ -47,16 +104,8 @@ window.steelPan = {
         };
     },
 
-    _getAudioContext: function () {
-        if (!this._audioContext) {
-            this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-
-        return this._audioContext;
-    },
-
-    getAudioTime: function () {
-        const ctx = this._getAudioContext();
+    getAudioTime: async function () {
+        const ctx = await this._ensureAudioContext();
         return ctx.currentTime;
     },
 
@@ -66,7 +115,7 @@ window.steelPan = {
     },
 
     _loadBuffer: async function (noteKey) {
-        const ctx = this._getAudioContext();
+        const ctx = await this._ensureAudioContext();
         const path = this._getSamplePath(noteKey);
 
         let buffer = this._audioBuffers[path];
@@ -81,14 +130,6 @@ window.steelPan = {
         return buffer;
     },
 
-    ensureAudioReady: async function () {
-        const ctx = this._getAudioContext();
-
-        if (ctx.state === "suspended") {
-            await ctx.resume();
-        }
-    },
-
     preloadNotes: async function (noteKeys) {
         if (!Array.isArray(noteKeys) || noteKeys.length === 0)
             return;
@@ -96,34 +137,34 @@ window.steelPan = {
         await Promise.all(noteKeys.map(noteKey => this._loadBuffer(noteKey)));
     },
 
-    playNote: async function (noteKey) {
-        await this.ensureAudioReady();
-
-        const ctx = this._getAudioContext();
+    playNote: async function (componentId, noteKey) {
+        const ctx = await this._ensureAudioContext();
         const buffer = await this._loadBuffer(noteKey);
 
         const source = ctx.createBufferSource();
         source.buffer = buffer;
-        source.connect(ctx.destination);
+
+        const componentGain = await this._getOrCreateComponentGain(componentId);
+        source.connect(componentGain);
+
         source.start();
 
         return true;
     },
 
-    playNotes: async function (noteKeys) {
+    playNotes: async function (componentId, noteKeys) {
         if (!Array.isArray(noteKeys) || noteKeys.length === 0)
             return;
 
-        await this.ensureAudioReady();
-
-        const ctx = this._getAudioContext();
+        const ctx = await this._ensureAudioContext();
+        const componentGain = await this._getOrCreateComponentGain(componentId);
 
         for (const noteKey of noteKeys) {
             const buffer = await this._loadBuffer(noteKey);
 
             const source = ctx.createBufferSource();
             source.buffer = buffer;
-            source.connect(ctx.destination);
+            source.connect(componentGain);
             source.start();
         }
     },
@@ -327,7 +368,7 @@ window.steelPan = {
         if (!ref)
             return;
 
-        await this.playNote(noteKey);
+        await this.playNote(componentId, noteKey);
 
         this._setNotePlaying(componentId, noteKey, true);
 
@@ -343,8 +384,7 @@ window.steelPan = {
         if (!Array.isArray(scheduledActions) || scheduledActions.length === 0)
             return null;
 
-        await this.ensureAudioReady();
-        const ctx = this._getAudioContext();
+        const ctx = await this._ensureAudioContext();
         const startAt = ctx.currentTime + 0.05;
 
         await this.playMidiScheduleAt(componentId, scheduledActions, startAt);
@@ -355,13 +395,13 @@ window.steelPan = {
         if (!Array.isArray(scheduledActions) || scheduledActions.length === 0)
             return null;
 
-        await this.ensureAudioReady();
-
-        const ctx = this._getAudioContext();
+        const ctx = await this._ensureAudioContext();
         const actualStartAt = typeof startAt === "number" ? startAt : (ctx.currentTime + 0.05);
 
         this.stopMidiSchedule(componentId);
         this._ensureComponentScheduleState(componentId);
+
+        const componentGain = await this._getOrCreateComponentGain(componentId);
 
         const uniqueNoteKeys = [...new Set(
             scheduledActions
@@ -385,16 +425,15 @@ window.steelPan = {
         const perNoteMap = this._scheduledSourcesByNoteByComponent[componentId];
         const timers = this._scheduledVisualTimersByComponent[componentId];
 
-        for (const action of sortedActions) {
-            if (!action.isNoteOn)
-                continue;
+        const noteOnActions = sortedActions.filter(action => action.isNoteOn);
 
+        for (const action of noteOnActions) {
             const when = actualStartAt + action.timeSeconds;
             const buffer = await this._loadBuffer(action.noteKey);
 
             const source = ctx.createBufferSource();
             source.buffer = buffer;
-            source.connect(ctx.destination);
+            source.connect(componentGain);
             source.start(when);
 
             const normalizedNoteKey = this._normalizeEnharmonic(action.noteKey);
@@ -476,9 +515,7 @@ window.steelPan = {
         if (!Array.isArray(actions) || actions.length === 0)
             return null;
 
-        await this.ensureAudioReady();
-
-        const ctx = this._getAudioContext();
+        const ctx = await this._ensureAudioContext();
         const actualStartAt = startAt ?? (ctx.currentTime + 0.05);
 
         for (const action of actions) {
@@ -516,9 +553,7 @@ window.steelPan = {
     },
 
     playMetronomeTick: async function (isAccent, when) {
-        await this.ensureAudioReady();
-
-        const ctx = this._getAudioContext();
+        const ctx = await this._ensureAudioContext();
         const now = when ?? ctx.currentTime;
 
         const oscillator = ctx.createOscillator();

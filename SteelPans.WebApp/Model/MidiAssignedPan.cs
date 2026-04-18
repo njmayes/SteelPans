@@ -8,4 +8,5 @@ public sealed class MidiAssignedPan
     public required PanType PanType { get; init; }
     public required SteelPan Pan { get; init; }
     public List<MidiPanEvent> Events { get; set; } = [];
+    public double Volume { get; set; } = 1.0;
 }

@@ -5,6 +5,19 @@ public sealed class MidiTrackInfo
     public required int Index { get; init; }
     public string? Name { get; init; }
     public int NoteCount { get; init; }
+
+    public string DisplayInfo
+    {
+        get
+        {
+            var baseName = string.IsNullOrWhiteSpace(Name)
+                ? $"Track {Index + 1}"
+                : Name;
+
+            var noteCount = $" ({NoteCount} notes)";
+            return $"{baseName}{noteCount}";
+        }
+    }
 }
 public sealed class MidiPanPlaybackAction
 {

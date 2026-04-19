@@ -3,7 +3,7 @@
 @using SteelPans.WebApp.Model
 @using SteelPans.WebApp.Extensions
 
-<div class="sp-section midi-loader @(Disabled ? "midi-loader--disabled" : null)">
+<div class="sp-section midi-loader">
     <div class="midi-loader__top">
         <label class="form-label">MIDI file</label>
     </div>
@@ -28,32 +28,36 @@
                     <span class="bi bi-music-note-list"></span>
                 </button>
 
-                @if (showTrackOverlay_)
-                {
-                    <div class="midi-loader__track-overlay">
-                        <div class="midi-loader__track-overlay-header">
-                            <span class="midi-loader__track-overlay-title">Tracks</span>
-                            <button type="button"
-                                    class="midi-loader__track-overlay-close"
-                                    aria-label="Close tracks"
-                                    @onclick="CloseTrackOverlay">
-                                <span class="bi bi-x-lg"></span>
-                            </button>
-                        </div>
-
-                        <div class="midi-loader__track-list">
-                            @foreach (var track in Tracks)
-                            {
-                                <div class="midi-loader__track-item">
-                                    <div class="midi-loader__track-name">@GetTrackDisplay(track)</div>
-                                    <div class="midi-loader__track-meta">
-                                        @track.NoteCount note@(track.NoteCount == 1 ? "" : "s")
-                                    </div>
-                                </div>
-                            }
-                        </div>
+                <div class="midi-loader__track-overlay @(showTrackOverlay_ ? "midi-loader__track-overlay--open" : null)"
+                     aria-hidden="@(!showTrackOverlay_).ToString().ToLowerInvariant()">
+                    <div class="midi-loader__track-overlay-header">
+                        <span class="midi-loader__track-overlay-title">Tracks</span>
+                        <button type="button"
+                                class="midi-loader__track-overlay-close"
+                                aria-label="Close tracks"
+                                @onclick="CloseTrackOverlay">
+                            <span class="bi bi-x-lg"></span>
+                        </button>
                     </div>
-                }
+
+                    <div class="midi-loader__track-list">
+                        @foreach (var track in Tracks)
+                        {
+                            <div class="midi-loader__track-item">
+                                <div class="midi-loader__track-details">
+                                    <div class="midi-loader__track-name">@track.DisplayInfo</div>
+                                    <div class="midi-loader__track-meta">@GetMetaInfo(track)</div>
+                                </div>
+                                <button type="button"
+                                        class="midi-loader__track-button"
+                                        aria-label="Add/Remove Track"
+                                        @onclick="async () => await OnTrackButtonPressed(track)">
+                                    <span class="bi @(!IsTrackAssigned(track) ? "bi-plus-lg" : "bi-dash-lg")" />
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
             </div>
         }
     </div>
@@ -61,19 +65,32 @@
 
 @code {
     [Parameter]
-    public bool Disabled { get; set; }
-
-    [Parameter]
     public string FileName { get; set; } = string.Empty;
 
     [Parameter]
     public IReadOnlyList<MidiTrackInfo> Tracks { get; set; } = [];
 
     [Parameter]
+    public IReadOnlyList<MidiTrackAssignment> Assignments { get; set; } = [];
+
+    [Parameter]
     public EventCallback<IBrowserFile> OnSingleMidiSelected { get; set; }
 
     [Parameter]
     public EventCallback<IReadOnlyList<IBrowserFile>> OnMultipleMidiSelected { get; set; }
+
+    [Parameter]
+    public EventCallback<MidiTrackInfo> OnTrackAdded { get; set; }
+
+    [Parameter]
+    public EventCallback<MidiTrackInfo> OnTrackRemoved { get; set; }
+
+    private HashSet<int> AssignedTracks =>
+        Tracks
+            .Where(t => Assignments.Any(a => a.TrackIndex == t.Index))
+            .OrderBy(t => t.Index)
+            .Select(t => t.Index)
+            .ToHashSet();
 
     private bool HasTracks => Tracks.Count > 0;
     private bool showTrackOverlay_;
@@ -88,12 +105,26 @@
         showTrackOverlay_ = false;
     }
 
-    private static string GetTrackDisplay(MidiTrackInfo track)
+    private bool IsTrackAssigned(MidiTrackInfo track)
     {
-        var name = string.IsNullOrWhiteSpace(track.Name)
-            ? $"Track {track.Index + 1}"
-            : track.Name.Trim();
+        return AssignedTracks.Contains(track.Index);
+    }
 
-        return $"{track.Index + 1}. {name}";
+    private async Task OnTrackButtonPressed(MidiTrackInfo track)
+    {
+        if (IsTrackAssigned(track))
+        {
+            await OnTrackRemoved.InvokeAsync(track);
+        }
+        else
+        {
+            CloseTrackOverlay();
+            await OnTrackAdded.InvokeAsync(track);
+        }
+    }
+
+    private string GetMetaInfo(MidiTrackInfo track)
+    {
+        return $"{track.NoteCount} note{(track.NoteCount == 1 ? "" : "s")}{(AssignedTracks.Contains(track.Index) ? " - Assigned" : "")}";
     }
 }

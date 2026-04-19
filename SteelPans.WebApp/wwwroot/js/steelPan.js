@@ -618,5 +618,32 @@ window.steelPan = {
         }
 
         this._metronomeNodes = [];
+    },
+
+    beginMetronomeWeightDrag: function (trackElement, dotNetRef, initialClientY) {
+        if (!trackElement || !dotNetRef)
+            return;
+
+        const update = (clientY) => {
+            const rect = trackElement.getBoundingClientRect();
+            const localY = clientY - rect.top;
+            dotNetRef.invokeMethodAsync("OnMetronomeWeightDragged", localY, rect.height);
+        };
+
+        const onPointerMove = (event) => {
+            update(event.clientY);
+        };
+
+        const stop = () => {
+            window.removeEventListener("pointermove", onPointerMove);
+            window.removeEventListener("pointerup", stop);
+            window.removeEventListener("pointercancel", stop);
+        };
+
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", stop);
+        window.addEventListener("pointercancel", stop);
+
+        update(initialClientY);
     }
 };

@@ -26,11 +26,13 @@
     else
     {
         <section class="pans-page__top-grid">
-            <MidiLoader Disabled="@isMidiPlaying_"
-                        FileName="@midiFileName_"
+            <MidiLoader FileName="@midiFileName_"
                         Tracks="@midiTracks_"
+                        Assignments="@midiTrackAssignments_"
                         OnSingleMidiSelected="OnSingleMidiSelectedAsync"
-                        OnMultipleMidiSelected="OnMultipleMidiSelectedAsync" />
+                        OnMultipleMidiSelected="OnMultipleMidiSelectedAsync"
+                        OnTrackAdded="async (track) => await OpenAddModalAsync(track.Index)"
+                        OnTrackRemoved="async (track) => await RemoveTrackAssignmentAsync(track.Index)" />
 
             <ModalPopup IsOpen="@showMergeMidiModal_"
                         Title="Merge MIDI tracks"
@@ -60,7 +62,7 @@
             </ModalPopup>
         </section>
 
-        @if (activeMidiPans_.Any(x => x.Events.Count > 0))
+        @if (activeMidiPans_.Any(x => x.MidiPan.Events.Count > 0))
         {
             <section class="pans-page__midi-controls">
                 <MidiPlaybackControl CurrentTime="@playbackPosition_"
@@ -78,7 +80,8 @@
         
         <section class="pans-page__content">
             <div class="pans-page__toolbar">
-                <Toolbar MenuButtonLabel="Open Tools"
+                <Toolbar @ref="toolsToolbar_"
+                         MenuButtonLabel="Open Tools"
                          MenuAriaLabel="Tools"
                          Side="Toolbar.ToolbarSide.Left">
 
@@ -130,28 +133,29 @@
                 <div class="pans-page__assigned-pans">
                     @foreach (var assignedPan in activeMidiPans_)
                     {
-                        <section class="sp-section pans-page__assigned-pan" @key="assignedPan.InstanceId">
+                        <section class="sp-section pans-page__assigned-pan" @key="assignedPan.MidiPan.InstanceId">
                             <div class="pans-page__assigned-pan-header">
                                 <div class="pans-page__assigned-pan-copy">
-                                    <div class="pans-page__assigned-pan-title">@assignedPan.TrackLabel</div>
-                                    <div class="pans-page__assigned-pan-subtitle">@assignedPan.PanType.ToSpacedPascal()</div>
+                                    <div class="pans-page__assigned-pan-title">@assignedPan.MidiPan.TrackLabel</div>
+                                    <div class="pans-page__assigned-pan-subtitle">@assignedPan.MidiPan.PanType.ToSpacedPascal()</div>
                                 </div>
-                                <Toolbar MenuButtonLabel="Open Pan Actions"
+                                <Toolbar @ref="assignedPan.Toolbar"
+                                         MenuButtonLabel="Open Pan Actions"
                                          MenuAriaLabel="Pan Actions"
                                          Side="Toolbar.ToolbarSide.Right">
                                     <ToolbarElement Title="Remove"
                                                     IconClass="bi bi-trash3"
-                                                    OnClick="() => RemoveTrackAssignmentAsync(assignedPan.TrackIndex)" />
+                                                    OnClick="() => RemoveTrackAssignmentAsync(assignedPan.MidiPan.TrackIndex)" />
                                     <ToolbarElement Title="Volume"
                                                     IconClass="bi bi-volume-up-fill">
-                                        <VolumeControl Volume="@assignedPan.Volume"
-                                                       VolumeChanged="@(value => OnPanVolumeChangedAsync(assignedPan, value))" />
+                                        <VolumeControl Volume="@assignedPan.MidiPan.Volume"
+                                                       VolumeChanged="@(value => OnPanVolumeChangedAsync(assignedPan.MidiPan, value))" />
                                     </ToolbarElement>
                                 </Toolbar>
                             </div>
 
-                            <SteelPanView Pan="@assignedPan.Pan"
-                                          InstanceChanged="@(view => RegisterAssignedSteelPanViewAsync(assignedPan.InstanceId, view))" />
+                            <SteelPanView Pan="@assignedPan.MidiPan.Pan"
+                                          InstanceChanged="@(view => RegisterAssignedSteelPanViewAsync(assignedPan.MidiPan.InstanceId, view))" />
                         </section>
                     }
                 </div>

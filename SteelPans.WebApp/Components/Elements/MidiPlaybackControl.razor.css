@@ -15,7 +15,15 @@
 
 .midi-playback__bottom-row {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: 7ch auto 7ch;
+}
+
+.midi-playback__time--current {
+    justify-self: start;
+}
+
+.midi-playback__time--total {
+    justify-self: end;
 }
 
 .midi-playback__slider {

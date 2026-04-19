@@ -22,10 +22,6 @@
         white-space: nowrap;
     }
 
-.midi-loader--disabled {
-    opacity: 0.75;
-}
-
 .midi-loader__top {
     display: flex;
     flex-direction: row;
@@ -46,6 +42,7 @@
     gap: 0.5rem;
     align-items: stretch;
     min-width: 0;
+    transition: grid-template-columns 180ms ease, gap 180ms ease;
 }
 
 .midi-loader__row--with-menu {
@@ -54,6 +51,7 @@
 
 .midi-loader__file {
     min-width: 0;
+    transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease;
 }
 
 .midi-loader__menu-wrap {
@@ -102,6 +100,20 @@
     background: #ffffff;
     box-shadow: 0 1rem 2rem rgba(15, 23, 42, 0.18);
     z-index: 20;
+    opacity: 0;
+    transform: translateY(-0.35rem) scale(0.98);
+    transform-origin: top right;
+    pointer-events: none;
+    visibility: hidden;
+    transition: opacity 160ms ease, transform 160ms ease, visibility 0s linear 160ms;
+}
+
+.midi-loader__track-overlay--open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+    visibility: visible;
+    transition: opacity 160ms ease, transform 160ms ease, visibility 0s linear 0s;
 }
 
 .midi-loader__track-overlay-header {
@@ -149,15 +161,22 @@
 
 .midi-loader__track-item {
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.65rem 0.75rem;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.45rem 0.55rem;
     border-radius: 0.7rem;
 }
 
-    .midi-loader__track-item:hover {
+    .midi-loader__track-item:hover:not(:has(.midi-loader__track-button:hover)) {
         background: #f8fafc;
     }
+
+.midi-loader__track-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
 
 .midi-loader__track-name {
     min-width: 0;
@@ -172,6 +191,19 @@
 .midi-loader__track-meta {
     color: #64748b;
     font-size: 0.75rem;
+}
+
+.midi-loader__track-button {
+    width: 2rem;
+    height: 2rem;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 0.5rem;
+    background: rgba(225, 225, 225, 0.96);
+    color: #2563eb;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
 @media (max-width: 700px) {

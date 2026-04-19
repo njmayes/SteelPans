@@ -84,7 +84,7 @@ public partial class Metronome
     private bool accentFlash_;
 
     private bool EffectiveIsPlaying => Enabled && IsPlaying;
-    private bool CanEditBpm => Enabled && !IsPlaying;
+    private bool CanEditBpm => !IsPlaying;
     private bool CanEditTimeSignature => Enabled && !IsPlaying && !MidiLoaded;
 
     private double ArmAngleDeg => !Enabled || !EffectiveIsPlaying

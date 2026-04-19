@@ -188,7 +188,7 @@ h4 {
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .sp-note--off:hover {
+    .sp-note:hover {
         fill: #e5e5e5;
     }
 }

@@ -1,7 +1,8 @@
 .pans-page {
-    display: flex;
-    flex-direction: column;
-    min-height: 100dvh;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    height: 100dvh;
+    min-height: 0;
     overflow: auto;
     box-sizing: border-box;
     gap: clamp(0.2rem, 0.5vw, 0.9rem);
@@ -9,6 +10,10 @@
     padding-inline: clamp(0.1rem, 0.35vw, 1rem);
     padding-block-end: clamp(0.1rem, 0.35vw, 1rem);
 }
+
+    .pans-page:has(> section.pans-page__midi-controls) {
+        grid-template-rows: auto auto auto minmax(0, 1fr);
+    }
 
 .pans-page__hero {
     padding: clamp(0.4rem, 0.8vw, 0.8rem) clamp(0.8rem, 1vw, 1rem);
@@ -76,20 +81,6 @@
 
 .pans-page__content {
     position: relative;
-    min-height: 23rem;
-}
-
-.pans-page__assigned-pans {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
-    gap: 0.25rem;
-}
-
-.pans-page__content,
-.pans-page__pan-stage,
-.pans-page__assigned-pans,
-.pans-page__assigned-pan,
-.pans-page__assigned-pan-copy {
     min-width: 0;
     min-height: 0;
 }
@@ -104,13 +95,30 @@
 .pans-page__pan-stage {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    min-width: 0;
+    min-height: min(24rem, 70dvh);
+    height: 100%;
+    overflow: auto;
+}
+
+.pans-page__assigned-pans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    gap: 0.25rem;
+    min-width: 0;
+    min-height: 0;
 }
 
 .pans-page__assigned-pan {
     position: relative;
     isolation: isolate;
     padding-top: 0.6rem;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-top: clamp(0rem, calc(8rem - 10%), 4rem);
+    padding-bottom: 0.5rem;
 }
 
 .pans-page__assigned-pan-header {
@@ -134,7 +142,8 @@
 .pans-page__assigned-pan-copy {
     min-width: 0;
     pointer-events: auto;
-    position: relative;
+    position: absolute;
+    right: 3rem;
     z-index: 11;
 }
 
@@ -235,11 +244,6 @@
 }
 
 @media (max-width: 700px) {
-    .pans-page {
-        height: auto;
-        overflow: visible;
-    }
-
     .pans-page__hero-content {
         flex-direction: column;
         align-items: stretch;

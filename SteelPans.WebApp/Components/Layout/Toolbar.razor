@@ -28,11 +28,11 @@
                                 type="button"
                                 role="menuitem"
                                 @onclick="() => ActivateElementAsync(index)">
-                            <span>@element.Title</span>
                             @if (!string.IsNullOrWhiteSpace(element.IconClass))
                             {
                                 <span class="@element.IconClass" aria-hidden="true"></span>
                             }
+                            <span>@element.Title</span>
 
                         </button>
                     }
@@ -113,6 +113,12 @@
     private string SideClass => Side == ToolbarSide.Right
         ? "toolbar--right"
         : "toolbar--left";
+
+    public void CloseToolbar()
+    {
+        menuOpen_ = false;
+        activeIndex_ = -1;
+    }
 
     internal void RegisterElement(ToolbarElement element)
     {

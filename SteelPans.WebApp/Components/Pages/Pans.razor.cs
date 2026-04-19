@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using SteelPans.WebApp.Components.Elements;
+using SteelPans.WebApp.Components.Layout;
 using SteelPans.WebApp.Model;
 using SteelPans.WebApp.Services;
 using System.Xml.Linq;
@@ -17,7 +18,7 @@ public partial class Pans
     private readonly Dictionary<int, List<MidiPanEvent>> midiTrackEventsByIndex_ = [];
     private readonly Dictionary<Guid, SteelPanView> steelPanViews_ = [];
 
-    private IReadOnlyList<PanType> AvailablePanTypes => availablePanTypes_.Where(x => !activeMidiPans_.Select(y => y.Pan.PanType).Contains(x)).ToList();
+    private IReadOnlyList<PanType> AvailablePanTypes => availablePanTypes_.Where(x => !activeMidiPans_.Select(y => y.MidiPan.Pan.PanType).Contains(x)).ToList();
 
     private string? loadError_;
 
@@ -29,7 +30,14 @@ public partial class Pans
 
     private MidiPlaybackInfo? midiPlaybackInfo_;
     private List<MidiTrackAssignment> midiTrackAssignments_ = [];
-    private List<MidiAssignedPan> activeMidiPans_ = [];
+
+    private class PanWithToolbar
+    {
+        public required MidiAssignedPan MidiPan { get; set; }
+        public Toolbar? Toolbar { get; set; }
+    }
+
+    private List<PanWithToolbar> activeMidiPans_ = [];
 
     private CancellationTokenSource? midiPlaybackCts_;
     private CancellationTokenSource? playbackProgressCts_;
@@ -49,6 +57,7 @@ public partial class Pans
 
     private Metronome? metronome_;
     private AddPanModal? addPanModal_;
+    private Toolbar? toolsToolbar_;
 
     private int EffectiveMidiBpm =>
         midiBpmOverride_
@@ -150,14 +159,14 @@ public partial class Pans
     private async Task AddTrackAssignmentAsync(MidiTrackAssignment assignment)
     {
         midiTrackAssignments_.RemoveAll(x => x.TrackIndex == assignment.TrackIndex);
-        activeMidiPans_.RemoveAll(x => x.TrackIndex == assignment.TrackIndex);
+        activeMidiPans_.RemoveAll(x => x.MidiPan.TrackIndex == assignment.TrackIndex);
 
         var assignedPan = BuildAssignedPan(assignment);
         if (assignedPan is null)
             return;
 
         midiTrackAssignments_.Add(assignment);
-        activeMidiPans_.Add(assignedPan);
+        activeMidiPans_.Add(new PanWithToolbar { MidiPan = assignedPan });
 
         RecalculatePlaybackDuration();
         playbackPosition_ = TimeSpan.Zero;
@@ -174,13 +183,13 @@ public partial class Pans
             await StopMidiAsync();
 
         var removedPans = activeMidiPans_
-            .Where(x => x.TrackIndex == trackIndex)
+            .Where(x => x.MidiPan.TrackIndex == trackIndex)
             .ToList();
 
         foreach (var removedPan in removedPans)
-            steelPanViews_.Remove(removedPan.InstanceId);
+            steelPanViews_.Remove(removedPan.MidiPan.InstanceId);
 
-        activeMidiPans_.RemoveAll(x => x.TrackIndex == trackIndex);
+        activeMidiPans_.RemoveAll(x => x.MidiPan.TrackIndex == trackIndex);
 
         RecalculatePlaybackDuration();
         playbackPosition_ = TimeSpan.Zero;
@@ -219,9 +228,9 @@ public partial class Pans
 
         steelPanViews_[instanceId] = view;
 
-        var assignedPan = activeMidiPans_.FirstOrDefault(x => x.InstanceId == instanceId);
+        var assignedPan = activeMidiPans_.FirstOrDefault(x => x.MidiPan.InstanceId == instanceId);
         if (assignedPan is not null)
-            await JS.InvokeVoidAsync("steelPan.setComponentVolume", view.ComponentId, assignedPan.Volume);
+            await JS.InvokeVoidAsync("steelPan.setComponentVolume", view.ComponentId, assignedPan.MidiPan.Volume);
     }
 
     private async Task OnPanVolumeChangedAsync(MidiAssignedPan activePan, double volume)
@@ -237,7 +246,7 @@ public partial class Pans
         {
             foreach (var assignedPan in activeMidiPans_)
             {
-                if (steelPanViews_.TryGetValue(assignedPan.InstanceId, out var assignedView))
+                if (steelPanViews_.TryGetValue(assignedPan.MidiPan.InstanceId, out var assignedView))
                     return assignedView;
             }
         }
@@ -283,8 +292,8 @@ public partial class Pans
         var playbackGroups = activeMidiPans_
             .Select(x => new
             {
-                Pan = x,
-                Events = GetPlaybackEventsFromOffset(x.Events, startOffset)
+                Pan = x.MidiPan,
+                Events = GetPlaybackEventsFromOffset(x.MidiPan.Events, startOffset)
             })
             .Where(x => x.Events.Count > 0)
             .ToList();
@@ -571,7 +580,7 @@ public partial class Pans
         var currentAudioTime = await JS.InvokeAsync<double>("steelPan.getAudioTime");
 
         var remainingEvents = activeMidiPans_
-            .SelectMany(x => GetPlaybackEventsFromOffset(x.Events, absolutePosition))
+            .SelectMany(x => GetPlaybackEventsFromOffset(x.MidiPan.Events, absolutePosition))
             .OrderBy(x => x.Start)
             .ToList();
 
@@ -677,13 +686,23 @@ public partial class Pans
     private void RecalculatePlaybackDuration()
     {
         var maxEnd = activeMidiPans_
-            .SelectMany(x => GetTempoAdjustedEvents(x.Events))
+            .SelectMany(x => GetTempoAdjustedEvents(x.MidiPan.Events))
             .DefaultIfEmpty()
             .Max(x => x is null ? TimeSpan.Zero : x.Start + x.Duration);
 
         playbackDuration_ = maxEnd;
         playbackPosition_ = ClampPlaybackTime(playbackPosition_);
         playbackSessionStartOffset_ = ClampPlaybackTime(playbackSessionStartOffset_);
+    }
+
+    private async Task OpenAddModalAsync(int? initialTrack = null)
+    {
+        toolsToolbar_?.CloseToolbar();
+        foreach (var panAndToolbar in activeMidiPans_)
+        {
+            panAndToolbar.Toolbar?.CloseToolbar();
+        }
+        addPanModal_?.Open(initialTrack);
     }
 
     private static SteelPan ClonePan(SteelPan source)

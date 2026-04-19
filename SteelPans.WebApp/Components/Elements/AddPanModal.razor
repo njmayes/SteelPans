@@ -17,7 +17,7 @@
                     {
                         @foreach (var track in UnassignedTracks)
                         {
-                            <option value="@track.Index.ToString()">@GetTrackDisplay(track.Index)</option>
+                            <option value="@track.Index.ToString()">@track.DisplayInfo</option>
                         }
                     }
                 </select>
@@ -69,12 +69,12 @@
 
     [Parameter]
     public IReadOnlyList<MidiTrackAssignment> Assignments { get; set; } = [];
-    
+
     [Parameter]
     public IReadOnlyList<PanType> AvailablePanTypes { get; set; } = [];
 
 
-    
+
     private enum AddModalType
     {
         None,
@@ -95,7 +95,11 @@
             if (!int.TryParse(selectedTrackIndexString_, out var trackIndex))
                 return string.Empty;
 
-            return GetTrackDisplay(trackIndex);
+            var track = Tracks.FirstOrDefault(x => x.Index == trackIndex);
+            if (track is null)
+                return string.Empty;
+
+            return track.DisplayInfo;
         }
     }
 
@@ -107,6 +111,7 @@
 
     private bool CanOpenTrackAddModal =>
         !Disabled &&
+        HasTracks &&
         AvailablePanTypes.Count > 0 &&
         UnassignedTracks.Count > 0 &&
         int.TryParse(selectedTrackIndexString_, out _);
@@ -128,15 +133,10 @@
         AvailablePanTypes.Contains(panType);
 
     private bool CanConfirmAdd => CanConfirmAddPan || CanConfirmAddTrack;
-    
 
-    protected override void OnParametersSet()
+    private void GetInitialParameters(int? initialTrack)
     {
-        bool success = Enum.TryParse<PanType>(selectedPanTypeString_, out var selectedPanType);
-        if (AvailablePanTypes.Count > 0 && !success || !AvailablePanTypes.Contains(selectedPanType))
-        {
-            selectedPanTypeString_ = AvailablePanTypes.FirstOrDefault().ToString();
-        }
+        selectedPanTypeString_ = AvailablePanTypes.FirstOrDefault().ToString();
 
         if (UnassignedTracks.Count == 0)
         {
@@ -144,42 +144,35 @@
             return;
         }
 
+        selectedTrackIndexString_ = initialTrack?.ToString() ?? string.Empty;
+
         if (!int.TryParse(selectedTrackIndexString_, out var selectedTrackIndex) ||
             UnassignedTracks.All(x => x.Index != selectedTrackIndex))
         {
             selectedTrackIndexString_ = UnassignedTracks[0].Index.ToString();
         }
     }
-    
 
-    private string GetTrackDisplay(int trackIndex)
+    protected override void OnParametersSet()
     {
-        var track = Tracks.First(x => x.Index == trackIndex);
-
-        var baseName = string.IsNullOrWhiteSpace(track.Name)
-            ? $"Track {track.Index + 1}"
-            : track.Name;
-
-        var noteCount = $" ({track.NoteCount} notes)";
-        return $"{baseName}{noteCount}";
+        GetInitialParameters(initialTrack: null);
     }
 
 
-    public void Open()
+    public void Open(int? initialTrack = null)
     {
+        if (!CanOpenTrackAddModal && !CanOpenPanAddModal)
+            return;
+            
+        GetInitialParameters(initialTrack);
         if (HasTracks)
         {
-            if (!CanOpenTrackAddModal)
-                return;
-
             addModalType_ = AddModalType.Track;
-            return;
         }
-
-        if (!CanOpenPanAddModal)
-            return;
-
-        addModalType_ = AddModalType.Pan;
+        else
+        {
+            addModalType_ = AddModalType.Pan;
+        }
     }
 
     private void Close()
@@ -211,7 +204,7 @@
         var assignment = new MidiTrackAssignment
         {
             TrackIndex = track.Index,
-            TrackLabel = GetTrackDisplay(track.Index),
+            TrackLabel = track.DisplayInfo,
             AssignedPanType = panType
         };
 

@@ -18,12 +18,27 @@ public abstract class OverlayComponentBase : ComponentBase, IDisposable
         Registry.Unregister(this);
     }
 
-    public async Task OnOpenAsync()
+    public Task NotifyOpenedAsync()
     {
-        await Registry.OnOpenComponent(this);
+        return Registry.OnOpenComponent(this);
     }
 
-    public abstract Task OnCloseAsync();
+    public Task RequestCloseAsync()
+    {
+        return InvokeAsync(OnCloseAsync);
+    }
+
+    protected Task RunOnUiAsync(Func<Task> action)
+    {
+        return InvokeAsync(action);
+    }
+
+    protected Task RunOnUiAsync(Action action)
+    {
+        return InvokeAsync(action);
+    }
+
+    protected abstract Task OnCloseAsync();
 }
 
 public class OverlayManagerService
@@ -44,10 +59,10 @@ public class OverlayManagerService
 
     public async Task OnOpenComponent(OverlayComponentBase component)
     {
-        foreach (var other in components_)
+        foreach (var other in components_.ToArray())
         {
             if (component != other)
-                await other.OnCloseAsync();
+                await other.RequestCloseAsync();
         }
     }
 }

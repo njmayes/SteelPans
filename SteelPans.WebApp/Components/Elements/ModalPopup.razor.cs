@@ -52,18 +52,20 @@ public partial class ModalPopup
 
     [Parameter]
     public EventCallback OnClose { get; set; }
-
+        
     private bool isOpen_;
     public async Task OpenModal()
     {
         isOpen_ = true;
-        await OnOpenAsync();
+        await NotifyOpenedAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
-    public override async Task OnCloseAsync()
+    protected override async Task OnCloseAsync()
     {
         isOpen_ = false;
         await OnClose.InvokeAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task OnBackdropClickedAsync()
@@ -71,6 +73,6 @@ public partial class ModalPopup
         if (!CloseOnBackdropClick)
             return;
 
-        await OnCloseAsync();
+        await RequestCloseAsync();
     }
 }

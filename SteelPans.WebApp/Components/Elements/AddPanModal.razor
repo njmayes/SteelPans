@@ -181,7 +181,7 @@
             return;
 
         addModalType_ = AddModalType.None;
-        await modal_!.OnCloseAsync();
+        await modal_!.RequestCloseAsync();
     }
 
     private async Task ConfirmAddPanAsync(PanType panType)

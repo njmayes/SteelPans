@@ -85,7 +85,8 @@ public partial class Toolbar
         menuOpen_ = !menuOpen_;
         if (menuOpen_)
         {
-            await OnOpenAsync();
+            await NotifyOpenedAsync();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -110,10 +111,11 @@ public partial class Toolbar
             menuOpen_ = false;
     }
 
-    public override async Task OnCloseAsync()
+    protected override async Task OnCloseAsync()
     {
         menuOpen_ = false;
         activeIndex_ = -1;
+        await InvokeAsync(StateHasChanged);
     }
 
     public override void Dispose()

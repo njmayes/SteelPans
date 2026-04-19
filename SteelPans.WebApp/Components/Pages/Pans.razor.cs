@@ -141,7 +141,7 @@ public partial class Pans
         midiFileName_ = $"{mergeMidiFileName_.Trim()}.mid";
 
         await OnMidiFileSelected(() => MidiService.MergeMidiTracksAsync(midiFileName_, pendingMergeMidiFiles_));
-        await addMergedTrackModal_.OnCloseAsync();
+        await addMergedTrackModal_.RequestCloseAsync();
 
         pendingMergeMidiFiles_ = [];
         mergeMidiFileName_ = string.Empty;

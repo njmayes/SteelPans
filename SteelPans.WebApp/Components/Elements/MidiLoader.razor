@@ -103,10 +103,13 @@
     {
         showTrackOverlay_ = !showTrackOverlay_;
         if (showTrackOverlay_)
-            await OnOpenAsync();
+        {
+            await NotifyOpenedAsync();
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
-    public override async Task OnCloseAsync()
+    protected override async Task OnCloseAsync()
     {
         showTrackOverlay_ = false;
         await Task.CompletedTask;
@@ -125,7 +128,7 @@
         }
         else
         {
-            await OnCloseAsync();
+            await RequestCloseAsync();
             await OnTrackAdded.InvokeAsync(track);
         }
     }

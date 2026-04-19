@@ -72,6 +72,10 @@
     display: block;
 }
 
+.pans-page__track_name::placeholder {
+    opacity: 0.5;
+}
+
 .pans-page__midi-controls {
     display: grid;
     grid-template-columns: 1fr;

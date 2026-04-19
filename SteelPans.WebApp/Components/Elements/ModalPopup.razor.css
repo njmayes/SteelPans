@@ -23,6 +23,7 @@
     border-radius: 1rem;
     box-shadow: 0 1.5rem 3rem rgba(15, 23, 42, 0.2);
     pointer-events: auto;
+    padding: 1.25rem 1rem 0.75rem;
 }
 
 .modal-popup__header {
@@ -30,7 +31,6 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1.25rem 1.5rem 0.75rem;
 }
 
 .modal-popup__title {
@@ -46,9 +46,12 @@
     color: #64748b;
 }
 
+.modal-popup__body {
+    margin: 1rem 0;
+}
+
 .modal-popup__actions {
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
-    padding: 0 1rem 1rem;
 }

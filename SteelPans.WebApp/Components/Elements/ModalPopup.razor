@@ -1,4 +1,6 @@
-﻿@if (IsOpen)
+﻿@inherits OverlayComponentBase
+
+@if (isOpen_)
 {
     <div class="@BackdropClass" @onclick="OnBackdropClickedAsync"></div>
 
@@ -22,7 +24,7 @@
                     <button type="button"
                             class="btn-close"
                             aria-label="Close"
-                            @onclick="CloseAsync">
+                            @onclick="OnCloseAsync">
                     </button>
                 }
             </div>

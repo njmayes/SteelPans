@@ -2,10 +2,8 @@
 
 namespace SteelPans.WebApp.Components.Elements;
 
-public partial class ModalPopup : ComponentBase
+public partial class ModalPopup
 {
-    [Parameter]
-    public bool IsOpen { get; set; }
 
     [Parameter]
     public string Title { get; set; } = string.Empty;
@@ -55,13 +53,24 @@ public partial class ModalPopup : ComponentBase
     [Parameter]
     public EventCallback OnClose { get; set; }
 
-    private Task CloseAsync() => OnClose.InvokeAsync();
+    private bool isOpen_;
+    public async Task OpenModal()
+    {
+        isOpen_ = true;
+        await OnOpenAsync();
+    }
 
-    private Task OnBackdropClickedAsync()
+    public override async Task OnCloseAsync()
+    {
+        isOpen_ = false;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task OnBackdropClickedAsync()
     {
         if (!CloseOnBackdropClick)
-            return Task.CompletedTask;
+            return;
 
-        return CloseAsync();
+        await OnCloseAsync();
     }
 }

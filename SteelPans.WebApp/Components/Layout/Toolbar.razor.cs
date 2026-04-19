@@ -34,8 +34,6 @@ public partial class Toolbar
     [Parameter]
     public ToolbarSide Side { get; set; } = ToolbarSide.Left;
 
-    [Parameter]
-    public EventCallback OnOpen { get; set; }
 
     private readonly List<ToolbarElement> elements_ = [];
     private int activeIndex_ = -1;
@@ -85,9 +83,9 @@ public partial class Toolbar
     private async Task ToggleMenu()
     {
         menuOpen_ = !menuOpen_;
-        if (menuOpen_ && OnOpen.HasDelegate)
+        if (menuOpen_)
         {
-            await OnOpen.InvokeAsync();
+            await OnOpenAsync();
         }
     }
 
@@ -112,12 +110,13 @@ public partial class Toolbar
             menuOpen_ = false;
     }
 
-    private void CloseActive()
+    public override async Task OnCloseAsync()
     {
+        menuOpen_ = false;
         activeIndex_ = -1;
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         elements_.Clear();
     }

@@ -1,4 +1,4 @@
-﻿<ModalPopup IsOpen="@(addModalType_ != AddModalType.None)"
+﻿<ModalPopup @ref="modal_"
             Title="Add Pan"
             OnClose="Close">
     <ChildContent>
@@ -82,6 +82,7 @@
         Track
     }
 
+    private ModalPopup? modal_;
     private AddModalType addModalType_;
     private string? selectedTrackIndexString_;
     private string? selectedPanTypeString_;
@@ -160,20 +161,18 @@
     }
 
 
-    public void Open(int? initialTrack = null)
+    public async Task Open(int? initialTrack = null)
     {
-        if (!CanOpenTrackAddModal && !CanOpenPanAddModal)
+        if (!(CanOpenTrackAddModal || CanOpenPanAddModal) || modal_ is null)
             return;
 
         GetInitialParameters(initialTrack);
         if (HasTracks)
-        {
             addModalType_ = AddModalType.Track;
-        }
         else
-        {
             addModalType_ = AddModalType.Pan;
-        }
+
+        await modal_!.OpenModal();
     }
 
     private void Close()

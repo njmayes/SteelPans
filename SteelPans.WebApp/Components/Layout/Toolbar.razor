@@ -1,48 +1,49 @@
 ﻿@implements IDisposable
+@inherits OverlayComponentBase
 
 <CascadingValue Value="this" IsFixed="true">
     @ChildContent
 </CascadingValue>
 
-<div class="toolbar @(SideClass) @(ActiveElement is not null ? "toolbar--panel-open" : null)">
-    @if (ActiveElement is null)
-    {
-        <div class="toolbar__menu-wrap @(menuOpen_ ? "toolbar__menu-wrap--open" : null)">
-            <button class="toolbar__menu-button"
-                    type="button"
-                    aria-label="@MenuButtonLabel"
-                    aria-expanded="@menuOpen_"
-                    @onclick="ToggleMenu">
-                <span class="bi @(menuOpen_? OpenIconClass : ClosedIconClass)" aria-hidden="true"></span>
-            </button>
+<div class="toolbar @(SideClass) @(menuOpen_ ? "toolbar--menu-open" : null) @(ActiveElement is not null ? "toolbar--panel-open" : null)">
+    <div class="toolbar__menu-wrap @(menuOpen_ ? "toolbar__menu-wrap--open" : null) @(ActiveElement is not null ? "toolbar__menu-wrap--hidden" : null)">
+        <button class="toolbar__menu-button"
+                type="button"
+                aria-label="@MenuButtonLabel"
+                aria-expanded="@menuOpen_"
+                @onclick="ToggleMenu">
+            <span class="bi @(menuOpen_? OpenIconClass : ClosedIconClass)" aria-hidden="true"></span>
+        </button>
 
-            @if (menuOpen_ && elements_.Count > 0)
+        <div class="toolbar__menu"
+             role="menu"
+             aria-label="@MenuAriaLabel"
+             aria-hidden="@(!menuOpen_ || ActiveElement is not null)">
+            @for (var i = 0; i < elements_.Count; i++)
             {
-                <div class="toolbar__menu" role="menu" aria-label="@MenuAriaLabel">
-                    @for (var i = 0; i < elements_.Count; i++)
+                var index = i;
+                var element = elements_[index];
+
+                <button class="toolbar__menu-item"
+                        type="button"
+                        role="menuitem"
+                        tabindex="@((menuOpen_ && ActiveElement is null) ? 0 : -1)"
+                        @onclick="() => ActivateElementAsync(index)">
+                    @if (!string.IsNullOrWhiteSpace(element.IconClass))
                     {
-                        var index = i;
-                        var element = elements_[index];
-
-                        <button class="toolbar__menu-item"
-                                type="button"
-                                role="menuitem"
-                                @onclick="() => ActivateElementAsync(index)">
-                            @if (!string.IsNullOrWhiteSpace(element.IconClass))
-                            {
-                                <span class="@element.IconClass" aria-hidden="true"></span>
-                            }
-                            <span>@element.Title</span>
-
-                        </button>
+                        <span class="@element.IconClass" aria-hidden="true"></span>
                     }
-                </div>
+
+                    <span>@element.Title</span>
+                </button>
             }
         </div>
-    }
-    else
-    {
-        <div class="toolbar__panel">
+    </div>
+
+    <div class="toolbar__panel @(ActiveElement is not null ? "toolbar__panel--open" : "toolbar__panel--closed")"
+         aria-hidden="@(ActiveElement is null)">
+        @if (ActiveElement is not null)
+        {
             <div class="toolbar__panel-header">
                 <div class="toolbar__panel-title-wrap">
                     @if (!string.IsNullOrWhiteSpace(ActiveElement.IconClass))
@@ -62,7 +63,7 @@
                     <button class="toolbar__panel-close"
                             type="button"
                             aria-label="@($"Close {ActiveElement.Title}")"
-                            @onclick="CloseActive">
+                            @onclick="OnCloseAsync">
                         <span class="bi bi-x-lg" aria-hidden="true"></span>
                     </button>
                 </div>
@@ -71,6 +72,6 @@
             <div class="toolbar__panel-body">
                 @ActiveElement.ChildContent
             </div>
-        </div>
-    }
+        }
+    </div>
 </div>

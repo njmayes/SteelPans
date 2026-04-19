@@ -24,7 +24,6 @@ public partial class Pans
 
     private string midiFileName_ = string.Empty;
 
-    private bool showMergeMidiModal_;
     private string mergeMidiFileName_ = string.Empty;
     private IReadOnlyList<IBrowserFile> pendingMergeMidiFiles_ = [];
 
@@ -60,7 +59,7 @@ public partial class Pans
 
     private Metronome? metronome_;
     private AddPanModal? addPanModal_;
-    private Toolbar? toolsToolbar_;
+    private ModalPopup? addMergedTrackModal_;
 
     private int InitialMidiBpm => midiPlaybackInfo_?.InitialBpm ?? metronomeBpm_;
     private int EffectiveMidiBpm =>
@@ -128,22 +127,21 @@ public partial class Pans
         await InvokeAsync(StateHasChanged);
     }
 
-    private void CloseMergeMidiModal()
+    private async Task CloseMergeMidiModal()
     {
-        showMergeMidiModal_ = false;
         mergeMidiFileName_ = string.Empty;
         pendingMergeMidiFiles_ = [];
     }
 
     private async Task ConfirmMergeMidiAsync()
     {
-        if (pendingMergeMidiFiles_.Count == 0)
+        if (pendingMergeMidiFiles_.Count == 0 || addMergedTrackModal_ is null)
             return;
 
         midiFileName_ = $"{mergeMidiFileName_.Trim()}.mid";
-        showMergeMidiModal_ = false;
 
         await OnMidiFileSelected(() => MidiService.MergeMidiTracksAsync(midiFileName_, pendingMergeMidiFiles_));
+        await addMergedTrackModal_.OnCloseAsync();
 
         pendingMergeMidiFiles_ = [];
         mergeMidiFileName_ = string.Empty;
@@ -151,10 +149,11 @@ public partial class Pans
 
     private async Task OnMultipleMidiSelectedAsync(IReadOnlyList<IBrowserFile> files)
     {
-        pendingMergeMidiFiles_ = files;
-        showMergeMidiModal_ = true;
+        if (addMergedTrackModal_ is null)
+            return;
 
-        await InvokeAsync(StateHasChanged);
+        pendingMergeMidiFiles_ = files;
+        await addMergedTrackModal_.OpenModal();
     }
 
     private async Task OnSingleMidiSelectedAsync(IBrowserFile file)
@@ -731,32 +730,6 @@ public partial class Pans
         playbackPosition_ = ClampPlaybackTime(playbackPosition_);
         playbackSessionStartOffset_ = ClampPlaybackTime(playbackSessionStartOffset_);
         playbackScoreAnchorOffset_ = ClampPlaybackTime(playbackScoreAnchorOffset_);
-    }
-
-    private void OpenAddModal(int? initialTrack = null)
-    {
-        toolsToolbar_?.Close();
-        foreach (var panAndToolbar in activeMidiPans_)
-        {
-            panAndToolbar.Toolbar?.Close();
-        }
-
-        addPanModal_?.Open(initialTrack);
-    }
-
-    private void OnOpenToolbar(Toolbar? toolbar)
-    {
-        if (toolbar == null)
-            return;
-
-        if (toolsToolbar_ != toolbar)
-            toolsToolbar_?.Close();
-
-        foreach (var panAndToolbar in activeMidiPans_)
-        {
-            if (panAndToolbar.Toolbar != toolbar)
-                panAndToolbar.Toolbar?.Close();
-        }
     }
 
     private static SteelPan ClonePan(SteelPan source)

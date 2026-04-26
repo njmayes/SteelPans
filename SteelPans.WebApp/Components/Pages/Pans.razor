@@ -128,10 +128,16 @@
             </div>
 
             <div class="pans-page__pan-stage">
-                <div class="pans-page__assigned-pans">
+                <div class="pans-page__assigned-pans"
+                     @ref="assignedPansElement_"
+                     data-pan-count="@activeMidiPans_.Count">
                     @foreach (var assignedPan in activeMidiPans_)
                     {
                         <section class="sp-section pans-page__assigned-pan" @key="assignedPan.MidiPan.InstanceId">
+                            <div class="pans-page__assigned-pan-container">
+                                <SteelPanView Pan="@assignedPan.MidiPan.Pan"
+                                              InstanceChanged="@(view => RegisterAssignedSteelPanViewAsync(assignedPan.MidiPan.InstanceId, view))" />
+                            </div>
                             <div class="pans-page__assigned-pan-header">
                                 <div class="pans-page__assigned-pan-copy">
                                     <div class="pans-page__assigned-pan-title">@assignedPan.MidiPan.Label</div>
@@ -149,11 +155,6 @@
                                                        VolumeChanged="@(value => OnPanVolumeChangedAsync(assignedPan.MidiPan, value))" />
                                     </ToolbarElement>
                                 </Toolbar>
-                            </div>
-
-                            <div class="pans-page__assigned-pan-container">
-                                <SteelPanView Pan="@assignedPan.MidiPan.Pan"
-                                              InstanceChanged="@(view => RegisterAssignedSteelPanViewAsync(assignedPan.MidiPan.InstanceId, view))" />
                             </div>
                         </section>
                     }

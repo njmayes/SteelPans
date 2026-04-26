@@ -63,6 +63,8 @@ public partial class Pans
     private AddPanModal? addPanModal_;
     private ModalPopup? addMergedTrackModal_;
 
+    private ElementReference assignedPansElement_;
+
     private int InitialMidiBpm => midiPlaybackInfo_?.InitialBpm ?? metronomeBpm_;
     private int EffectiveMidiBpm =>
         midiBpmOverride_
@@ -80,6 +82,14 @@ public partial class Pans
         {
             loadError_ = ex.Message;
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("panLayout.observe", assignedPansElement_);
+
+        await JS.InvokeVoidAsync("panLayout.update", assignedPansElement_);
     }
 
     private async Task OnMidiFileSelected(Func<Task<MidiFile>> getMidiFile)

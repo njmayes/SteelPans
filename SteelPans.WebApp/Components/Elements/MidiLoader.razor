@@ -91,7 +91,7 @@
 
     private HashSet<int> AssignedTracks =>
         Tracks
-            .Where(t => Assignments.Any(a => a.TrackIndex == t.Index))
+            .Where(t => Assignments.Any(a => a.Index == t.Index))
             .OrderBy(t => t.Index)
             .Select(t => t.Index)
             .ToHashSet();

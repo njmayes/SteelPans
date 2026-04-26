@@ -394,6 +394,7 @@
 .metronome__arm-weight--locked {
     cursor: default;
     opacity: 0.82;
+    pointer-events: none;
 }
 
 .metronome__scale {

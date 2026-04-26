@@ -71,9 +71,9 @@
     public IReadOnlyList<MidiTrackAssignment> Assignments { get; set; } = [];
 
     [Parameter]
-    public IReadOnlyList<PanType> AvailablePanTypes { get; set; } = [];
+    public IReadOnlyList<PanType> PanTypes { get; set; } = [];
 
-
+    private IReadOnlyList<PanType> AvailablePanTypes => PanTypes.Where(x => !Assignments.Select(a => a.AssignedPanType).Contains(x)).ToList();
 
     private enum AddModalType
     {
@@ -106,7 +106,7 @@
 
     private List<MidiTrackInfo> UnassignedTracks =>
         Tracks
-            .Where(t => Assignments.All(a => a.TrackIndex != t.Index))
+            .Where(t => Assignments.All(a => a.Index != t.Index))
             .OrderBy(t => t.Index)
             .ToList();
 
@@ -188,8 +188,8 @@
     {
         var assignment = new MidiTrackAssignment
         {
-            TrackIndex = -1,
-            TrackLabel = "No Track",
+            Index = PanTypes.IndexOf(panType),
+            Label = "No Track",
             AssignedPanType = panType
         };
 
@@ -207,8 +207,8 @@
 
         var assignment = new MidiTrackAssignment
         {
-            TrackIndex = track.Index,
-            TrackLabel = track.DisplayInfo,
+            Index = track.Index,
+            Label = track.DisplayInfo,
             AssignedPanType = panType
         };
 

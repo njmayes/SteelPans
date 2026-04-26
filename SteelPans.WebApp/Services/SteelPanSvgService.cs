@@ -16,6 +16,16 @@ public sealed class SteelPanSvgService
         "polyline"
     };
 
+    private static readonly HashSet<string> AllowedSvgClasses = new(StringComparer.Ordinal)
+    {
+        "sp-svg",
+        "sp-svg-circle",
+        "sp-label",
+        "sp-label--on",
+        "sp-note",
+        "sp-note--on"
+    };
+
     private static readonly Dictionary<string, string[]> EnharmonicSpellings = new(StringComparer.Ordinal)
     {
         ["A#"] = ["A#", "Bb"],
@@ -229,15 +239,14 @@ public sealed class SteelPanSvgService
         if (root is null)
             return;
 
-        root.SetAttributeValue("class", cssClass);
+        SetOnlyClasses(root, cssClass);
         root.SetAttributeValue("preserveAspectRatio", "xMidYMid meet");
 
         foreach (var circle in root.Descendants()
                      .Where(e => string.Equals(e.Name.LocalName, "circle", StringComparison.OrdinalIgnoreCase))
                      .Where(e => !IsInsideNoteOrLabelGroup(e)))
         {
-            RemoveClass(circle, "st0");
-            AddClass(circle, "sp-svg-circle");
+            SetOnlyClasses(circle, "sp-svg-circle");
         }
     }
 
@@ -411,7 +420,7 @@ public sealed class SteelPanSvgService
 
     private static void RewriteNoteElement(XElement element)
     {
-        AddClass(element, "sp-note");
+        SetOnlyClasses(element, "sp-note");
 
         element.SetAttributeValue("data-pan-component", "__COMPONENT_ID__");
         element.SetAttributeValue("data-pan-note", "__NOTE_KEY__");
@@ -465,13 +474,16 @@ public sealed class SteelPanSvgService
 
     private static void RewriteLabelMarkup(XElement element)
     {
-        AddClass(element, "sp-label");
+        SetOnlyClasses(element, "sp-label");
 
         foreach (var node in element.DescendantsAndSelf()
                      .Where(e => IsShapeElement(e) || IsTextElement(e)))
         {
             node.Attribute("fill")?.Remove();
             node.Attribute("style")?.Remove();
+
+            if (!ReferenceEquals(node, element))
+                SetOnlyClasses(node);
         }
     }
 
@@ -486,54 +498,51 @@ public sealed class SteelPanSvgService
                string.Equals(element.Name.LocalName, "tspan", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void AddClass(XElement element, string className)
+    private static void SetOnlyClasses(XElement element, params string[] classNames)
     {
-        var existing = ((string?)element.Attribute("class")) ?? string.Empty;
-
-        var classes = existing
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(c => !string.Equals(c, className, StringComparison.Ordinal))
+        var classes = classNames
+            .Where(c => AllowedSvgClasses.Contains(c))
+            .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        classes.Add(className);
+        if (classes.Count == 0)
+        {
+            element.Attribute("class")?.Remove();
+            return;
+        }
 
-        element.SetAttributeValue("class", string.Join(" ", classes.Distinct(StringComparer.Ordinal)));
+        element.SetAttributeValue("class", string.Join(" ", classes));
+    }
+
+    private static void AddClass(XElement element, string className)
+    {
+        var existingAllowed = ((string?)element.Attribute("class") ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(AllowedSvgClasses.Contains)
+            .Where(c => !string.Equals(c, className, StringComparison.Ordinal));
+
+        SetOnlyClasses(element, existingAllowed.Append(className).ToArray());
     }
 
     private static void RemoveClass(XElement element, string className)
     {
-        var existing = ((string?)element.Attribute("class")) ?? string.Empty;
-
-        var classes = existing
+        var existingAllowed = ((string?)element.Attribute("class") ?? string.Empty)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(AllowedSvgClasses.Contains)
             .Where(c => !string.Equals(c, className, StringComparison.Ordinal))
-            .ToList();
+            .ToArray();
 
-        if (classes.Count == 0)
-        {
-            element.Attribute("class")?.Remove();
-            return;
-        }
-
-        element.SetAttributeValue("class", string.Join(" ", classes.Distinct(StringComparer.Ordinal)));
+        SetOnlyClasses(element, existingAllowed);
     }
 
     private static void RemoveLegacyClasses(XElement element)
     {
-        var existing = ((string?)element.Attribute("class")) ?? string.Empty;
-
-        var classes = existing
+        var existingAllowed = ((string?)element.Attribute("class") ?? string.Empty)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(c => !string.Equals(c, "st0", StringComparison.Ordinal))
-            .ToList();
+            .Where(AllowedSvgClasses.Contains)
+            .ToArray();
 
-        if (classes.Count == 0)
-        {
-            element.Attribute("class")?.Remove();
-            return;
-        }
-
-        element.SetAttributeValue("class", string.Join(" ", classes.Distinct(StringComparer.Ordinal)));
+        SetOnlyClasses(element, existingAllowed);
     }
 
     private static void EnsureStyleContains(XElement element, string declaration)

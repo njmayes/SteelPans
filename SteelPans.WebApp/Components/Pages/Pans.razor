@@ -134,7 +134,7 @@
                         <section class="sp-section pans-page__assigned-pan" @key="assignedPan.MidiPan.InstanceId">
                             <div class="pans-page__assigned-pan-header">
                                 <div class="pans-page__assigned-pan-copy">
-                                    <div class="pans-page__assigned-pan-title">@assignedPan.MidiPan.TrackLabel</div>
+                                    <div class="pans-page__assigned-pan-title">@assignedPan.MidiPan.Label</div>
                                     <div class="pans-page__assigned-pan-subtitle">@assignedPan.MidiPan.PanType.ToSpacedPascal()</div>
                                 </div>
                                 <Toolbar MenuButtonLabel="Open Pan Actions"
@@ -142,7 +142,7 @@
                                          Side="Toolbar.ToolbarSide.Right">
                                     <ToolbarElement Title="Remove"
                                                     IconClass="bi bi-trash3"
-                                                    OnClick="() => RemoveTrackAssignmentAsync(assignedPan.MidiPan.TrackIndex)" />
+                                                    OnClick="() => RemoveTrackAssignmentAsync(assignedPan.MidiPan.Index)" />
                                     <ToolbarElement Title="Volume"
                                                     IconClass="bi bi-volume-up-fill">
                                         <VolumeControl Volume="@assignedPan.MidiPan.Volume"
@@ -163,7 +163,7 @@
 
         <AddPanModal @ref="addPanModal_"
                      Assignments="@midiTrackAssignments_"
-                     AvailablePanTypes="@AvailablePanTypes"
+                     PanTypes="@panTypes_"
                      Tracks="@midiTracks_"
                      OnAddTrack="AddTrackAssignmentAsync" />
     }

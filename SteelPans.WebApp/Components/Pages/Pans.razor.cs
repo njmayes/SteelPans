@@ -13,12 +13,11 @@ namespace SteelPans.WebApp.Components.Pages;
 public partial class Pans
 {
     private readonly List<SteelPan> pans_ = [];
-    private readonly List<PanType> availablePanTypes_ = [];
     private readonly List<MidiTrackInfo> midiTracks_ = [];
     private readonly Dictionary<int, List<MidiPanEvent>> midiTrackEventsByIndex_ = [];
     private readonly Dictionary<Guid, SteelPanView> steelPanViews_ = [];
 
-    private IReadOnlyList<PanType> AvailablePanTypes => availablePanTypes_.Where(x => !activeMidiPans_.Select(y => y.MidiPan.Pan.PanType).Contains(x)).ToList();
+    private IReadOnlyList<PanType> panTypes_ => pans_.Select(x => x.PanType).ToList();
 
     private string? loadError_;
 
@@ -76,13 +75,6 @@ public partial class Pans
         {
             pans_.Clear();
             pans_.AddRange(await PanLoader.LoadAsync());
-
-            availablePanTypes_.Clear();
-            availablePanTypes_.AddRange(pans_
-                .Select(x => x.PanType)
-                .Where(x => x != PanType.None)
-                .Distinct()
-                .OrderBy(x => x.ToString()));
         }
         catch (Exception ex)
         {
@@ -171,8 +163,8 @@ public partial class Pans
             ? await GetCurrentPlaybackPositionAsync()
             : (TimeSpan?)null;
 
-        midiTrackAssignments_.RemoveAll(x => x.TrackIndex == assignment.TrackIndex);
-        activeMidiPans_.RemoveAll(x => x.MidiPan.TrackIndex == assignment.TrackIndex);
+        midiTrackAssignments_.RemoveAll(x => x.Index == assignment.Index);
+        activeMidiPans_.RemoveAll(x => x.MidiPan.Index == assignment.Index);
 
         var assignedPan = BuildAssignedPan(assignment);
         if (assignedPan is null)
@@ -192,15 +184,15 @@ public partial class Pans
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task RemoveTrackAssignmentAsync(int trackIndex)
+    private async Task RemoveTrackAssignmentAsync(int index)
     {
-        midiTrackAssignments_.RemoveAll(x => x.TrackIndex == trackIndex);
+        midiTrackAssignments_.RemoveAll(x => x.Index == index);
 
         if (!midiTrackAssignments_.Any())
             await StopMidiAsync();
 
         var removedPans = activeMidiPans_
-            .Where(x => x.MidiPan.TrackIndex == trackIndex)
+            .Where(x => x.MidiPan.Index == index)
             .ToList();
 
         foreach (var removedPan in removedPans)
@@ -209,7 +201,7 @@ public partial class Pans
             removedPan.Toolbar?.Close();
         }
 
-        activeMidiPans_.RemoveAll(x => x.MidiPan.TrackIndex == trackIndex);
+        activeMidiPans_.RemoveAll(x => x.MidiPan.Index == index);
 
         RecalculatePlaybackDuration();
         playbackPosition_ = TimeSpan.Zero;
@@ -224,15 +216,15 @@ public partial class Pans
         if (sourcePan is null)
             return null;
 
-        var rawEvents = midiTrackEventsByIndex_.GetValueOrDefault(assignment.TrackIndex) ?? [];
+        var rawEvents = midiTrackEventsByIndex_.GetValueOrDefault(assignment.Index) ?? [];
         var panInstance = ClonePan(sourcePan);
         var filteredEvents = PanMidiMapper.FilterToPan(panInstance, rawEvents);
 
         return new MidiAssignedPan
         {
             InstanceId = Guid.NewGuid(),
-            TrackIndex = assignment.TrackIndex,
-            TrackLabel = assignment.TrackLabel,
+            Index = assignment.Index,
+            Label = assignment.Label,
             PanType = assignment.AssignedPanType,
             Pan = panInstance,
             Events = filteredEvents,

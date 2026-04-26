@@ -99,7 +99,7 @@
                         <div class="metronome__arm-stick"></div>
 
                         <div class="metronome__arm-weight-track" @ref="weightTrackRef_">
-                            <button class="metronome__arm-weight metronome__arm-weight--draggable"
+                            <button class="metronome__arm-weight metronome__arm-weight--draggable @(IsPlaying ? "metronome__arm-weight--locked" : "")"
                                     type="button"
                                     style="@($"top: {WeightTopPercent:F3}%;")"
                                     @onpointerdown="BeginWeightDragAsync"

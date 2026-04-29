@@ -10,96 +10,82 @@ public partial class Toolbar
         Right
     }
 
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
-
-    [Parameter]
-    public int InitialActiveIndex { get; set; } = -1;
-
-    [Parameter]
-    public string MenuButtonLabel { get; set; } = "Open menu";
-
-    [Parameter]
-    public string MenuAriaLabel { get; set; } = "Menu";
-
-    [Parameter]
-    public string ClosedIconClass { get; set; } = "bi-list";
-
-    [Parameter]
-    public string OpenIconClass { get; set; } = "bi-x-lg";
-
-    [Parameter]
-    public bool CloseOnAction { get; set; } = true;
-
-    [Parameter]
-    public ToolbarSide Side { get; set; } = ToolbarSide.Left;
-
-
     private readonly List<ToolbarElement> elements_ = [];
-    private int activeIndex_ = -1;
+
     private bool menuOpen_;
+
+    private bool anyOpen_ => menuOpen_ || ActiveElement is not null;
+
+    internal IReadOnlyList<ToolbarElement> Elements => elements_;
+
+    internal ToolbarElement? ActiveElement { get; private set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string MenuButtonLabel { get; set; } = "Open Menu";
+
+    [Parameter] public string MenuLabel { get; set; } = "Toolbar Menu";
+
+    [Parameter] public string ClosedIconClass { get; set; } = "bi-list";
+
+    [Parameter] public string OpenIconClass { get; set; } = "bi-x-lg";
+
+    [Parameter] public ToolbarSide Side { get; set; } = ToolbarSide.Left;
+
+    [Parameter] public bool CloseOnAction { get; set; } = true;
 
     private string SideClass => Side == ToolbarSide.Right
         ? "toolbar--right"
         : "toolbar--left";
 
-    public void Close()
-    {
-        menuOpen_ = false;
-        activeIndex_ = -1;
-    }
+    private string CssClass => $"toolbar " +
+        $"{SideClass} " +
+        $"{(anyOpen_ ? "toolbar__open" : "toolbar__closed")} " +
+        $"{(menuOpen_ ? "toolbar--menu-open" : "toolbar--menu-closed")} " +
+        $"{(ActiveElement is not null ? "toolbar--panel-open" : "toolbar--panel-closed")}";
 
     internal void RegisterElement(ToolbarElement element)
     {
-        elements_.Add(element);
-
-        if (activeIndex_ < 0 && InitialActiveIndex >= 0 && InitialActiveIndex < elements_.Count)
-            activeIndex_ = InitialActiveIndex;
-
-        StateHasChanged();
+        if (!elements_.Contains(element))
+        {
+            elements_.Add(element);
+            StateHasChanged();
+        }
     }
 
     internal void UnregisterElement(ToolbarElement element)
     {
-        var index = elements_.IndexOf(element);
-        if (index < 0)
-            return;
+        elements_.Remove(element);
 
-        elements_.RemoveAt(index);
-
-        if (activeIndex_ == index)
-            activeIndex_ = -1;
-        else if (activeIndex_ > index)
-            activeIndex_--;
+        if (ReferenceEquals(ActiveElement, element))
+        {
+            ActiveElement = null;
+        }
 
         StateHasChanged();
     }
 
-    private ToolbarElement? ActiveElement =>
-        activeIndex_ >= 0 && activeIndex_ < elements_.Count
-            ? elements_[activeIndex_]
-            : null;
-
     private async Task ToggleMenu()
     {
+        if (ActiveElement is not null)
+        {
+            ActiveElement = null;
+            menuOpen_ = true;
+            return;
+        }
+
         menuOpen_ = !menuOpen_;
         if (menuOpen_)
         {
             await NotifyOpenedAsync();
-            await InvokeAsync(StateHasChanged);
         }
     }
 
-    private async Task ActivateElementAsync(int index)
+    private async Task OpenElementAsync(ToolbarElement element)
     {
-        if (index < 0 || index >= elements_.Count)
-            return;
-
-        var element = elements_[index];
-
         if (element.HasBody)
         {
-            activeIndex_ = index;
+            ActiveElement = element;
             menuOpen_ = false;
             return;
         }
@@ -114,12 +100,15 @@ public partial class Toolbar
     protected override async Task OnCloseAsync()
     {
         menuOpen_ = false;
-        activeIndex_ = -1;
+        ActiveElement = null;
         await InvokeAsync(StateHasChanged);
     }
 
     public override void Dispose()
     {
+        ActiveElement = null;
         elements_.Clear();
+
+        base.Dispose();
     }
 }

@@ -71,7 +71,7 @@
         <section class="pans-page__content">
             <div class="pans-page__toolbar">
                 <Toolbar MenuButtonLabel="Open Tools"
-                         MenuAriaLabel="Tools"
+                         MenuLabel="Pan Tools"
                          Side="Toolbar.ToolbarSide.Left">
 
                     <ToolbarElement Title="Add Pan"
@@ -92,6 +92,7 @@
                                        type="checkbox"
                                        checked="@Playback.ClickTrackEnabled"
                                        @onchange="OnClickTrackEnabledShellChangedAsync"
+                                       @onclick:stopPropagation="true"
                                        aria-label="Enable metronome" />
 
                                 <span class="metronome-shell__status-switch-track" aria-hidden="true">
@@ -123,7 +124,7 @@
                                     <div class="pans-page__assigned-pan-subtitle">@assignedPan.PanType.ToSpacedPascal()</div>
                                 </div>
                                 <Toolbar MenuButtonLabel="Open Pan Actions"
-                                         MenuAriaLabel="Pan Actions"
+                                         MenuLabel="Pan Actions"
                                          Side="Toolbar.ToolbarSide.Right">
                                     <ToolbarElement Title="Remove"
                                                     IconClass="bi bi-trash3"

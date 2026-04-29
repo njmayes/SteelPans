@@ -184,7 +184,8 @@
 }
 
 .metronome-shell__status-switch {
-    --switch-base-size: 2.2rem;
+    --switch-base-size: 1.8rem;
+    --switch-track-width: clamp(2rem, var(--switch-base-size) + 0.8vw, 3rem);
     position: relative;
     z-index: 3;
     display: inline-flex;
@@ -214,8 +215,8 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    width: clamp(3rem, var(--switch-base-size) + 1vw, 4rem);
-    min-width: clamp(3rem, var(--switch-base-size) + 1vw, 4rem);
+    width: var(--switch-track-width);
+    min-width: var(--switch-track-width);
     height: calc(var(--switch-base-size) * 0.7);
     padding: clamp(0.14rem, 0.11rem + 0.08vw, 0.2rem);
     border-radius: 999px;
@@ -242,7 +243,7 @@
 }
 
     .metronome-shell__status-switch-input:checked + .metronome-shell__status-switch-track .metronome-shell__status-switch-thumb {
-        transform: translateX(calc(clamp(3rem, var(--switch-base-size) + 1vw, 4rem) - calc(var(--switch-base-size) * 0.46) - clamp(0.28rem, 0.28rem + 0.16vw, 0.4rem)));
+        transform: translateX(calc(var(--switch-track-width) - calc(var(--switch-base-size) * 0.46) - clamp(0.28rem, 0.28rem + 0.16vw, 0.4rem)));
     }
 
 .metronome-shell__status-switch:hover .metronome-shell__status-switch-track {

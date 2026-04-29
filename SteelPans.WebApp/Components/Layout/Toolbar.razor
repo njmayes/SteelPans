@@ -44,36 +44,33 @@
 
     <div class="toolbar__panel @(ActiveElement is not null ? "toolbar__panel--open" : "toolbar__panel--closed")"
          aria-hidden="@(ActiveElement is null)">
-        @if (ActiveElement is not null)
-        {
-            <div class="toolbar__panel-header">
-                <div class="toolbar__panel-title-wrap">
-                    @if (!string.IsNullOrWhiteSpace(ActiveElement.IconClass))
-                    {
-                        <span class="@ActiveElement.IconClass toolbar__panel-icon" aria-hidden="true"></span>
-                    }
+        <div class="toolbar__panel-header">
+            <div class="toolbar__panel-title-wrap">
+                @if (!string.IsNullOrWhiteSpace(ActiveElement?.IconClass))
+                {
+                    <span class="@ActiveElement?.IconClass toolbar__panel-icon" aria-hidden="true"></span>
+                }
 
-                    <span class="toolbar__panel-title">@ActiveElement.Title</span>
-                </div>
-
-                <div class="toolbar__panel-header-actions">
-                    @if (ActiveElement.HeaderActions is not null)
-                    {
-                        @ActiveElement.HeaderActions
-                    }
-
-                    <button class="toolbar__panel-close"
-                            type="button"
-                            aria-label="@($"Close {ActiveElement.Title}")"
-                            @onclick="OnCloseAsync">
-                        <span class="bi bi-x-lg" aria-hidden="true"></span>
-                    </button>
-                </div>
+                <span class="toolbar__panel-title">@ActiveElement?.Title</span>
             </div>
 
-            <div class="toolbar__panel-body">
-                @ActiveElement.ChildContent
+            <div class="toolbar__panel-header-actions">
+                @if (ActiveElement?.HeaderActions is not null)
+                {
+                    @ActiveElement?.HeaderActions
+                }
+
+                <button class="toolbar__panel-close"
+                        type="button"
+                        aria-label="@($"Close {ActiveElement?.Title}")"
+                        @onclick="OnCloseAsync">
+                    <span class="bi bi-x-lg" aria-hidden="true"></span>
+                </button>
             </div>
-        }
+        </div>
+
+        <div class="toolbar__panel-body">
+            @ActiveElement?.ChildContent
+        </div>
     </div>
 </div>

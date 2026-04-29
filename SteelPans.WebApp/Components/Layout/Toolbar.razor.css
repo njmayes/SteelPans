@@ -19,6 +19,7 @@
 }
 
 .toolbar__menu-wrap {
+    z-index: 5;
     display: grid;
     grid-template-rows: var(--toolbar__button-size) 0fr;
     align-items: start;
@@ -179,6 +180,7 @@
     }
 
 .toolbar__panel {
+    z-index: 1;
     width: clamp(18rem, 30vw, 20rem);
     border: 1px solid rgba(148, 163, 184, 0.34);
     border-radius: 1.35rem;
@@ -186,22 +188,24 @@
     box-shadow: 0 22px 60px rgba(15, 23, 42, 0.18);
     backdrop-filter: blur(10px);
     overflow: hidden;
-    transform-origin: top;
-    transition: opacity 500ms ease, transform 500ms ease, visibility 500ms ease;
+    transition: transform 500ms ease;
+}
+
+.toolbar--left .toolbar__panel {
+    transform-origin: top left;
+}
+
+.toolbar--right .toolbar__panel {
+    transform-origin: top right;
 }
 
 .toolbar__panel--closed {
-    width: 0;
-    opacity: 0;
-    transform: translateY(0.4rem) scale(0.98);
+    transform: translate(0.4rem, 0.4rem) scale(0);
     pointer-events: none;
-    visibility: hidden;
 }
 
 .toolbar__panel--open {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    visibility: visible;
+    transform: translate(0, 0) scale(1);
 }
 
 .toolbar__panel-header {
